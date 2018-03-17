@@ -2,8 +2,10 @@
 #define AARTFAAC_FILE_H
 
 #include <cstdint>
-#include <sstream>
 #include <complex>
+#include <fstream>
+#include <sstream>
+#include <iostream>
 
 struct Header {
 	static const uint32_t

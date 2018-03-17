@@ -1,12 +1,16 @@
+#include "aartfaacfile.h"
+
+#include <aoflagger.h>
+
+#include "aocommon/uvector.h"
+
 #include <complex>
 #include <iostream>
 #include <fstream>
 
-#include "aocommon/uvector.h"
-
-#include "aartfaacfile.h"
-
 #include <unistd.h>
+
+using namespace aoflagger;
 
 void allocateBuffers(const AartfaacFile& file)
 {
@@ -40,6 +44,18 @@ void allocateBuffers(const AartfaacFile& file)
 		std::cout << "All " << file.NTimesteps() << " scans fit in memory; no partitioning necessary.\n";
 	else
 		std::cout << "Observation does not fit fully in memory, will partition data in " << partCount << " chunks of " << (file.NTimesteps()/partCount) << " scans.\n";
+	
+	const size_t requiredWidthCapacity = (file.NTimesteps()+partCount-1)/partCount;
+	for(size_t antenna1=0;antenna1!=file.NAntennas();++antenna1)
+	{
+		for(size_t antenna2=antenna1; antenna2!=file.NAntennas(); ++antenna2)
+		{
+			ImageSet *imageSet = new ImageSet(_flagger->MakeImageSet(_curChunkEnd-_curChunkStart, nChannels, 8, 0.0f, requiredWidthCapacity));
+			_imageSetBuffers.insert(std::pair<std::pair<size_t,size_t>, ImageSet*>(
+				std::pair<size_t,size_t>(antenna1, antenna2), imageSet
+			));
+		}
+	}
 }
 
 int main(int argc, char* argv[])
