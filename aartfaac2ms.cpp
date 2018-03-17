@@ -2,9 +2,9 @@
 #include <iostream>
 #include <fstream>
 
-#include "uvector.h"
+#include "aocommon/uvector.h"
 
-#include "aartfaacms/aartfaacfile.h"
+#include "aartfaacfile.h"
 
 #include <unistd.h>
 
