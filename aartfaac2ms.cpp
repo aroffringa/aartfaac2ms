@@ -96,6 +96,10 @@ void Aartfaac2ms::initializeWriter(const char* outputFilename)
 	
 	setAntennas();
 	setSPWs();
+	setSource();
+	setField();
+	_writer->WritePolarizationForLinearPols(false);
+	setObservation();
 }
 
 void Aartfaac2ms::setAntennas()
@@ -141,6 +145,57 @@ void Aartfaac2ms::setSPWs()
 	);
 }
 
+void Aartfaac2ms::setSource()
+{
+	MSWriter::SourceInfo source;
+	source.sourceId = 0;
+	source.time = _file->StartTime();
+	source.interval = _file->StartTime() + _file->IntegrationTime()*_file->NTimesteps();
+	source.spectralWindowId = 0;
+	source.numLines = 0;
+	source.name = "AARTFAAC";
+	source.calibrationGroup = 0;
+	source.code = "";
+	source.directionRA = 0.0; // TODO (in radians)
+	source.directionDec = 0.0;
+	source.properMotion[0] = 0.0;
+	source.properMotion[1] = 0.0;
+	_writer->WriteSource(source);
+}
+
+void Aartfaac2ms::setField()
+{
+	MSWriter::FieldInfo field;
+	field.name = "AARTFAAC";
+	field.code = std::string();
+	field.time = _file->StartTime();
+	field.numPoly = 0;
+	field.delayDirRA = 0.0; // TODO (in radians)
+	field.delayDirDec = 0.0;
+	field.phaseDirRA = field.delayDirRA;
+	field.phaseDirDec = field.delayDirDec;
+	field.referenceDirRA = field.delayDirRA;
+	field.referenceDirDec = field.delayDirDec;
+	field.sourceId = -1;
+	field.flagRow = false;
+	_writer->WriteField(field);
+}
+
+void Aartfaac2ms::setObservation()
+{
+	Writer::ObservationInfo observation;
+	observation.telescopeName = "MWA";
+	observation.startTime = _file->StartTime();
+	observation.endTime = _file->StartTime() + _file->IntegrationTime()*_file->NTimesteps();
+	observation.observer = "Unknown";
+	observation.scheduleType = "AARTFAAC";
+	observation.project = "Unknown";
+	observation.releaseDate = 0;
+	observation.flagRow = false;
+	
+	_writer->WriteObservation(observation);
+}
+
 void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 {
 	_file.reset(new AartfaacFile(inputFilename));
@@ -165,16 +220,34 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 		ProgressBar progress("Reading");
 		for(size_t timeIndex=chunkStart; timeIndex!=chunkEnd; ++timeIndex)
 		{
-			_timesteps.emplace_back(_file->ReadTimestep(vis.data()));
-			
 			progress.SetProgress(timeIndex-chunkStart, chunkEnd-chunkStart);
 			
-			// TODO copy vis into the per-baseline buffers
+			_timesteps.emplace_back(_file->ReadTimestep(vis.data()));
+			
+			size_t bufferIndex = timeIndex-chunkStart;
+			std::complex<float>* visPtr = vis.data();
+			for(ImageSet& imageSet : _imageSetBuffers)
+			{
+				for(size_t ch=0; ch!=_file->NChannels(); ++ch)
+				{
+					for(size_t p=0; p!=4; ++p)
+					{
+						float
+							*realPtr = imageSet.ImageBuffer(p*2)+bufferIndex,
+							*imagPtr = imageSet.ImageBuffer(p*2+1)+bufferIndex;
+						realPtr[ch*imageSet.HorizontalStride()] = visPtr->real();
+						imagPtr[ch*imageSet.HorizontalStride()] = visPtr->imag();
+						++visPtr;
+					}
+				}
+			}
 		}	
 		_readWatch.Pause();
 		++index;
 		
 		// TODO Flag!
+		
+		_flagBuffers.clear();
 		for(size_t antenna1=0;antenna1!=_file->NAntennas();++antenna1)
 		{
 			for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
@@ -192,6 +265,8 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 			progress.SetProgress(timeIndex-chunkStart, chunkEnd-chunkStart);
 			processAndWriteTimestep(timeIndex, chunkStart);
 		}
+		
+		_flagBuffers.clear();
 	}
 }
 
@@ -200,14 +275,14 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 	const size_t nAntennas = _file->NAntennas();
 	const size_t nChannels = _file->NChannels();
 	const size_t nBaselines = nAntennas*(nAntennas+1)/2;
-	const Timestep &timestep = _timesteps[timeIndex - chunkStart];
-	const double dateMJD = timestep.startTime;
+	const Timestep& timestep = _timesteps[timeIndex - chunkStart];
+	const double startTime = timestep.startTime;
 	
 	//Geometry::UVWTimestepInfo uvwInfo;
 	//Geometry::PrepareTimestepUVW(uvwInfo, dateMJD, _mwaConfig.ArrayLongitudeRad(), _mwaConfig.ArrayLattitudeRad(), _mwaConfig.Header().raHrs, _mwaConfig.Header().decDegs);
 	
 	//TODO calculate actual UVW values
-	_uvws.resize(_file->NAntennas(), UVW{0.0, 0.0, 0.0});
+	_uvws.assign(_file->NAntennas(), UVW{0.0, 0.0, 0.0});
 	
 	/*double antU[antennaCount], antV[antennaCount], antW[antennaCount];
 	for(size_t antenna=0; antenna!=antennaCount; ++antenna)
@@ -237,7 +312,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 				v = _uvws[antenna1].v - _uvws[antenna2].v,
 				w = _uvws[antenna1].w - _uvws[antenna2].w;
 					
-			size_t bufferIndex = timeIndex;
+			size_t bufferIndex = timeIndex - chunkStart;
 #ifndef USE_SSE
 			for(size_t p=0; p!=4; ++p)
 			{
@@ -291,7 +366,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 			}
 	#endif
 				
-			_writer->WriteRow(dateMJD*86400.0, dateMJD*86400.0, antenna1, antenna2, u, v, w, timestep.endTime-timestep.startTime, _outputData.get(), _outputFlags.data(), _outputWeights.get());
+			_writer->WriteRow(startTime, startTime, antenna1, antenna2, u, v, w, timestep.endTime-timestep.startTime, _outputData.get(), _outputFlags.data(), _outputWeights.get());
 			++baselineIndex;
 		}
 	}
@@ -312,5 +387,6 @@ void Aartfaac2ms::initializeWeights(float* outputWeights, double integrationTime
 
 void Aartfaac2ms::CalculateUVW(double date, size_t antenna1, size_t antenna2, double& u, double& v, double& w)
 {
+	u=0.0; v=0.0; w=0.0;
 	// TODO
 }

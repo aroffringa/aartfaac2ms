@@ -40,6 +40,9 @@ private:
 	
 	void setAntennas();
 	void setSPWs();
+	void setSource();
+	void setField();
+	void setObservation();
 	
 	std::unique_ptr<class AartfaacFile> _file;
 	aoflagger::AOFlagger _flagger;

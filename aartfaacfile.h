@@ -113,6 +113,7 @@ public:
 	double Bandwidth() const { return 195312.5; }
 	double StartTime() const { return _header.startTime; }
 	double Frequency() const { return Bandwidth() *  _sbIndex; }
+	double IntegrationTime() const { return _header.endTime-_header.startTime; }
 private:
 	std::ifstream _file;
 	Header _header;
