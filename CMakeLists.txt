@@ -10,14 +10,17 @@ else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ggdb -Wvla -Wall -DNDEBUG -march=native -std=c++11")
 endif(PORTABLE)
 
-# Casacore has a separate CMake file in this directory
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake)
+
+find_library(AOFLAGGER_LIB aoflagger)
+find_path(AOFLAGGER_INCLUDE_DIR NAMES aoflagger.h)
 
 SET(CASACORE_MAKE_REQUIRED_EXTERNALS_OPTIONAL TRUE)
 find_package(Casacore REQUIRED COMPONENTS casa ms tables measures fits scimath scimath_f)
 
 find_package(CFITSIO REQUIRED)
 
+include_directories(${AOFLAGGER_INCLUDE_DIR})
 include_directories(${CASACORE_INCLUDE_DIRS})
 include_directories(${CFITSIO_INCLUDE_DIR})
 
@@ -42,7 +45,7 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 configure_file(version.h.in version.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(aartfaac2ms aartfaac2ms.cpp)
-target_link_libraries(aartfaac2ms ${CFITSIO_LIBRARY} ${CASACORE_LIBRARIES})
+add_executable(aartfaac2ms main.cpp aartfaac2ms.cpp averagingwriter.cpp fitsuser.cpp fitswriter.cpp mswriter.cpp progressbar.cpp stopwatch.cpp threadedwriter.cpp)
+target_link_libraries(aartfaac2ms ${AOFLAGGER_LIB} ${CFITSIO_LIBRARY} ${CASACORE_LIBRARIES})
 
 message(STATUS "Flags passed to C++ compiler: " ${CMAKE_CXX_FLAGS})

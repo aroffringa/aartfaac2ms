@@ -46,6 +46,11 @@ struct Header {
 	}
 };
 
+struct Timestep
+{
+	double startTime, endTime;
+};
+
 static_assert(sizeof(Header) == 512, "Header should be of size 512 bytes");
 
 // An AARTFAAC file has a header followed by the data, which is written as:
@@ -65,6 +70,12 @@ public:
 		std::cout << "buffersize=" << _blockSize << " (%512=" << (_blockSize%512) << ")\n";
 		std::cout << "filesize=" << _filesize << '\n';
 		std::cout << "nblocks=" << _filesize / (_blockSize+512) << "(%=" << _filesize%(_blockSize+512) << ")\n";
+		
+		std::string fn(filename);
+		size_t sbIndex = fn.find_last_of("SB");
+		if(sbIndex == std::string::npos || sbIndex+5 > fn.size())
+			throw std::runtime_error("Filename should have subband index preceded by 'SB' in it");
+		_sbIndex = std::stoi(fn.substr(sbIndex+2, 3));
 	}
 	
 	size_t VisPerTimestep() const
@@ -73,7 +84,7 @@ public:
 		return nBaselines * _header.nrChannels * _header.nrPolarizations;
 	}
 	
-	void ReadTimestep(std::complex<float>* buffer)
+	Timestep ReadTimestep(std::complex<float>* buffer)
 	{
 		Header h;
 		_file.read(reinterpret_cast<char*>(&h), sizeof(Header));
@@ -82,6 +93,8 @@ public:
 		if(!_file)
 			throw std::runtime_error("Error reading file");
 		++_blockPos;
+		
+		return Timestep{h.startTime, h.endTime};
 	}
 	
 	bool HasMore() const
@@ -96,10 +109,14 @@ public:
 	
 	size_t NChannels() const { return _header.nrChannels; }
 	size_t NAntennas() const { return _header.nrReceivers; }
+	
+	double Bandwidth() const { return 195312.5; }
+	double StartTime() const { return _header.startTime; }
+	double Frequency() const { return Bandwidth() *  _sbIndex; }
 private:
 	std::ifstream _file;
 	Header _header;
-	size_t _blockSize, _filesize, _blockPos;
+	size_t _blockSize, _filesize, _blockPos, _sbIndex;
 };
 
 #endif
