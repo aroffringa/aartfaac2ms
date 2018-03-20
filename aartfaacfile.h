@@ -84,6 +84,12 @@ public:
 		return nBaselines * _header.nrChannels * _header.nrPolarizations;
 	}
 	
+	void SkipTimesteps(int count)
+	{
+		_file.seekg(count * (sizeof(Header) + _blockSize));
+		_blockPos += count;
+	}
+	
 	Timestep ReadTimestep(std::complex<float>* buffer)
 	{
 		Header h;

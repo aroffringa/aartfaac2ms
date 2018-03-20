@@ -2,6 +2,8 @@
 
 #include <casacore/ms/MeasurementSets/MeasurementSet.h>
 
+#include <casacore/tables/DataMan/IncrementalStMan.h>
+
 #include <casacore/tables/Tables/ArrayColumn.h>
 #include <casacore/tables/Tables/ArrColDesc.h>
 #include <casacore/tables/Tables/ScalarColumn.h>
@@ -10,6 +12,7 @@
 #include <casacore/measures/TableMeasures/TableMeasDesc.h>
 
 #include <casacore/measures/Measures/MFrequency.h>
+
 
 using namespace casacore;
 
@@ -31,6 +34,7 @@ class MSWriterData
 		ArrayColumn<float> _weightSpectrumCol;
 		
 		casacore::Vector<float> _sigmaArr;
+		casacore::Vector<float> _weightsArr;
 
 		size_t _dyscoDataBitRate, _dyscoWeightBitRate;
 		std::string _dyscoDistribution, _dyscoNormalization;
@@ -76,6 +80,17 @@ void MSWriter::initialize()
 	
 	TableDesc tableDesc = MS::requiredTableDesc();
 	
+	casacore::IPosition dataShape(2, 4, _bandInfo.channels.size());
+	tableDesc.rwColumnDesc("SIGMA").setShape(IPosition(1,4));
+	tableDesc.rwColumnDesc("SIGMA").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
+	tableDesc.rwColumnDesc("WEIGHT").setShape(IPosition(1,4));
+	tableDesc.rwColumnDesc("WEIGHT").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
+	tableDesc.rwColumnDesc("FLAG").setShape(dataShape);
+	tableDesc.rwColumnDesc("FLAG").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
+	tableDesc.rwColumnDesc("UVW").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
+	tableDesc.rwColumnDesc("FLAG_CATEGORY").setShape(IPosition(3,0,0,0));
+	tableDesc.rwColumnDesc("FLAG_CATEGORY").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
+	
 	DataManagerCtor dyscoConstructor = 0;
 	Record dyscoSpec;
 	if(_useDysco) {
@@ -84,12 +99,33 @@ void MSWriter::initialize()
 	}
 	
 	SetupNewTable newTab(_filename, tableDesc, Table::New);
+	//Record dminfo = temptable.dataManagerInfo();
+	//dminfo = DataManInfo::adjustStMan (dminfo, "IncrementalStMan");
+	IncrementalStMan stman;
+	newTab.bindColumn("TIME", stman);
+	newTab.bindColumn("TIME_CENTROID", stman);
+	newTab.bindColumn("ANTENNA1", stman);
+	newTab.bindColumn("DATA_DESC_ID", stman);
+	newTab.bindColumn("INTERVAL", stman);
+	newTab.bindColumn("EXPOSURE", stman);
+	newTab.bindColumn("PROCESSOR_ID", stman);
+	newTab.bindColumn("SCAN_NUMBER", stman);
+	newTab.bindColumn("STATE_ID", stman);
+	newTab.bindColumn("SIGMA", stman);
+	
+	newTab.bindColumn("FLAG_CATEGORY", stman);
+	newTab.bindColumn("ARRAY_ID", stman);
+	newTab.bindColumn("FEED1", stman);
+	newTab.bindColumn("FEED2", stman);
+	newTab.bindColumn("FIELD_ID", stman);
+	newTab.bindColumn("FLAG_ROW", stman);
+	newTab.bindColumn("OBSERVATION_ID", stman);
+	
 	_data->_ms = MeasurementSet(newTab);
 	MeasurementSet &ms = _data->_ms;
 	ms.createDefaultSubtables(Table::New);
 	
 	ArrayColumnDesc<std::complex<float> > dataColumnDesc = ArrayColumnDesc<std::complex<float> >(MS::columnName(casacore::MSMainEnums::DATA));
-	casacore::IPosition dataShape(2, 4, _bandInfo.channels.size());
 	if (_useDysco && _data->_dyscoDataBitRate != 0) {
 		dataColumnDesc.setShape(dataShape);
 		dataColumnDesc.setOptions(ColumnDesc::Direct | ColumnDesc::FixedShape);
@@ -100,7 +136,7 @@ void MSWriter::initialize()
 	}
 	else {
 		dataColumnDesc.setShape(dataShape);
-		dataColumnDesc.setOptions(ColumnDesc::FixedShape);
+		dataColumnDesc.setOptions(ColumnDesc::Direct | ColumnDesc::FixedShape);
 		ms.addColumn(dataColumnDesc);
 	}
 	
@@ -113,7 +149,7 @@ void MSWriter::initialize()
 	}
 	else {
 		weightSpectrumColumnDesc.setShape(dataShape);
-		weightSpectrumColumnDesc.setOptions(ColumnDesc::FixedShape);
+		weightSpectrumColumnDesc.setOptions(ColumnDesc::Direct | ColumnDesc::FixedShape);
 		ms.addColumn(weightSpectrumColumnDesc);
 	}
 	
@@ -149,6 +185,7 @@ void MSWriter::initialize()
 	_data->_flagCol = ArrayColumn<bool>(ms, MS::columnName(casacore::MSMainEnums::FLAG));
 	
 	_data->_sigmaArr = casacore::Vector<float>(4);
+	_data->_weightsArr = casacore::Vector<float>(4);
 	for(size_t p=0; p!=4; ++p) _data->_sigmaArr[p] = 1.0;
 	
 	writeBandInfo();
@@ -498,25 +535,26 @@ void MSWriter::AddRows(size_t count)
 
 void MSWriter::WriteRow(double time, double timeCentroid, size_t antenna1, size_t antenna2, double u, double v, double w, double interval, const std::complex<float>* data, const bool* flags, const float *weights)
 {
-	_data->_timeCol.put(_rowIndex, time);
-	_data->_timeCentroidCol.put(_rowIndex, timeCentroid);
 	_data->_antenna1Col.put(_rowIndex, antenna1);
 	_data->_antenna2Col.put(_rowIndex, antenna2);
-	_data->_dataDescIdCol.put(_rowIndex, 0);
+	if(antenna1==0 && antenna2==0)
+	{
+		_data->_timeCol.put(_rowIndex, time);
+		_data->_timeCentroidCol.put(_rowIndex, timeCentroid);
+		_data->_dataDescIdCol.put(_rowIndex, 0);
+		_data->_intervalCol.put(_rowIndex, interval);
+		_data->_exposureCol.put(_rowIndex, interval);
+		_data->_processorIdCol.put(_rowIndex, -1);
+		_data->_scanNumberCol.put(_rowIndex, 1);
+		_data->_stateIdCol.put(_rowIndex, -1);
+		_data->_sigmaCol.put(_rowIndex, _data->_sigmaArr);
+	}
 	
 	casacore::Vector<double> uvwVec(3);
 	uvwVec[0] = u; uvwVec[1] = v; uvwVec[2] = w;
 	_data->_uvwCol.put(_rowIndex, uvwVec);
 	
-	_data->_intervalCol.put(_rowIndex, interval);
-	_data->_exposureCol.put(_rowIndex, interval);
-	_data->_processorIdCol.put(_rowIndex, -1);
-	_data->_scanNumberCol.put(_rowIndex, 1);
-	_data->_stateIdCol.put(_rowIndex, -1);
-	
 	size_t nPol = 4;
-	
-	_data->_sigmaCol.put(_rowIndex, _data->_sigmaArr);
 	
 	size_t valCount = _bandInfo.channels.size() * nPol;
 	casacore::IPosition shape(2, nPol, _bandInfo.channels.size());
@@ -535,17 +573,16 @@ void MSWriter::WriteRow(double time, double timeCentroid, size_t antenna1, size_
 		*weightSpectrumPtr = weights[i]; ++weightSpectrumPtr;
 	}
 	
-	casacore::Vector<float> weightsArr(nPol);
-	for(size_t p=0; p!=nPol; ++p) weightsArr[p] = 0.0;
+	for(size_t p=0; p!=nPol; ++p) _data->_weightsArr[p] = 0.0;
 	for(size_t ch=0; ch!=_bandInfo.channels.size(); ++ch)
 	{
 		for(size_t p=0; p!=nPol; ++p)
-			weightsArr[p] += weights[ch*nPol + p];
+			_data->_weightsArr[p] += weights[ch*nPol + p];
 	}
 	
 	_data->_dataCol.put(_rowIndex, dataArr);
 	_data->_flagCol.put(_rowIndex, flagArr);
-	_data->_weightCol.put(_rowIndex, weightsArr);
+	_data->_weightCol.put(_rowIndex, _data->_weightsArr);
 	_data->_weightSpectrumCol.put(_rowIndex, weightSpectrumArr);
 	
 	++_rowIndex;

@@ -26,10 +26,11 @@ public:
 		
 	Aartfaac2ms();
 	
-	void Run(const char* inputFilename, const char* outputFilename);
+	void Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename);
 	
 	void SetMemPercentage(double memPercentage) { _memPercentage = memPercentage; }
 	void SetTimeAveraging(size_t factor) { _timeAvgFactor = factor; }
+	void SetInterval(size_t start, size_t end) { _intervalStart = start; _intervalEnd = end; }
 	
 private:
 	void allocateBuffers();
@@ -44,14 +45,25 @@ private:
 	void setField();
 	void setObservation();
 	
+	size_t NTimestepsSelected() const
+	{
+		size_t nTimesteps = _file->NTimesteps();
+		if(_intervalEnd!=0 && nTimesteps>(_intervalEnd-_intervalStart))
+			nTimesteps = _intervalEnd - _intervalStart;
+		return nTimesteps;
+	}
+	
 	std::unique_ptr<class AartfaacFile> _file;
 	aoflagger::AOFlagger _flagger;
 	std::unique_ptr<Writer> _writer;
+	std::unique_ptr<aoflagger::Strategy> _strategy;
 	
 	// settings
 	OutputFormat _outputFormat;
+	bool _rfiDetection;
 	size_t _timeAvgFactor, _freqAvgFactor;
 	double _memPercentage;
+	size_t _intervalStart, _intervalEnd;
 	bool _useDysco;
 	size_t _dyscoDataBitRate;
 	size_t _dyscoWeightBitRate;

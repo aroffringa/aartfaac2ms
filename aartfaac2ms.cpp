@@ -1,5 +1,6 @@
 #include "aartfaac2ms.h"
 
+#include "antennaconfig.h"
 #include "averagingwriter.h"
 #include "fitswriter.h"
 #include "mswriter.h"
@@ -11,14 +12,20 @@
 
 #include <unistd.h>
 
+#include <xmmintrin.h>
+
 #define USE_SSE
+
+#define SPEED_OF_LIGHT 299792458.0        // speed of light in m/s
 
 using namespace aoflagger;
 
 Aartfaac2ms::Aartfaac2ms() :
 	_outputFormat(MSOutputFormat),
+	_rfiDetection(false),
 	_timeAvgFactor(1), _freqAvgFactor(1),
 	_memPercentage(90),
+	_intervalStart(0), _intervalEnd(0),
 	_useDysco(false),
 	_dyscoDataBitRate(8),
 	_dyscoWeightBitRate(12),
@@ -58,13 +65,14 @@ void Aartfaac2ms::allocateBuffers()
 	{
 		std::cout << "WARNING! This computer does not have enough memory for accurate flagging; expect non-optimal flagging accuracy.\n"; 
 	}
-	_nParts = 1 + _file->NTimesteps() / maxScansPerPart;
+	size_t nTimesteps = NTimestepsSelected();
+	_nParts = 1 + nTimesteps / maxScansPerPart;
 	if(_nParts == 1)
-		std::cout << "All " << _file->NTimesteps() << " scans fit in memory; no partitioning necessary.\n";
+		std::cout << "All " << nTimesteps << " scans fit in memory; no partitioning necessary.\n";
 	else
-		std::cout << "Observation does not fit fully in memory, will partition data in " << _nParts << " chunks of " << (_file->NTimesteps()/_nParts) << " scans.\n";
+		std::cout << "Observation does not fit fully in memory, will partition data in " << _nParts << " chunks of " << (nTimesteps/_nParts) << " scans.\n";
 	
-	const size_t requiredWidthCapacity = (_file->NTimesteps()+_nParts-1)/_nParts;
+	const size_t requiredWidthCapacity = (nTimesteps+_nParts-1)/_nParts;
 	for(size_t antenna1=0;antenna1!=_file->NAntennas();++antenna1)
 	{
 		for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
@@ -107,7 +115,7 @@ void Aartfaac2ms::setAntennas()
 	std::vector<Writer::AntennaInfo> antennas(_file->NAntennas());
 	for(size_t ant=0; ant!=antennas.size(); ++ant) {
 		Writer::AntennaInfo &antennaInfo = antennas[ant];
-		antennaInfo.name = std::string("aartfaac") + std::to_string(ant);
+		antennaInfo.name = std::string("A12_") + std::to_string(ant);
 		antennaInfo.station = "AARTFAAC";
 		antennaInfo.type = "GROUND-BASED";
 		antennaInfo.mount = "ALT-AZ"; // TODO should be "FIXED", but Casa does not like
@@ -196,8 +204,10 @@ void Aartfaac2ms::setObservation()
 	_writer->WriteObservation(observation);
 }
 
-void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
+void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename)
 {
+	AntennaConfig antConf(antennaConfFilename);
+	
 	_file.reset(new AartfaacFile(inputFilename));
 	ao::uvector<std::complex<float>> vis(_file->VisPerTimestep());
 	size_t index = 0;
@@ -206,12 +216,36 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 	
 	initializeWriter(outputFilename);
 	
+	if(_rfiDetection)
+	{
+		_strategy.reset(new Strategy(_flagger.MakeStrategy(
+			aoflagger::TelescopeId::AARTFAAC_TELESCOPE,
+			aoflagger::StrategyFlags::NONE,
+			_file->Frequency(),
+			_file->IntegrationTime(),
+			_file->Bandwidth() )));
+	}
+	
+	_file->SkipTimesteps(_intervalStart);
+	
+	ao::uvector<size_t> baselineMap(_file->NAntennas()*_file->NAntennas());
+	size_t bIndex = 0;
+	for(size_t antenna1=0; antenna1!=_file->NAntennas(); ++antenna1)
+	{
+		for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
+		{
+			baselineMap[antenna2 + antenna1*_file->NAntennas()] = bIndex;
+			++bIndex;
+		}
+	}
+
 	for(size_t chunkIndex = 0; chunkIndex != _nParts; ++chunkIndex)
 	{
 		std::cout << "=== Processing chunk " << (chunkIndex+1) << " of " << _nParts << " ===\n";
 		
-		size_t chunkStart = _file->NTimesteps()*chunkIndex/_nParts;
-		size_t chunkEnd = _file->NTimesteps()*(chunkIndex+1)/_nParts;
+		size_t nTimesteps = NTimestepsSelected();
+		size_t chunkStart = nTimesteps*chunkIndex/_nParts + _intervalStart;
+		size_t chunkEnd = nTimesteps*(chunkIndex+1)/_nParts + _intervalStart;
 		for(ImageSet& imageSet : _imageSetBuffers)
 			imageSet.ResizeWithoutReallocation(chunkEnd-chunkStart);
 		
@@ -226,18 +260,23 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 			
 			size_t bufferIndex = timeIndex-chunkStart;
 			std::complex<float>* visPtr = vis.data();
-			for(ImageSet& imageSet : _imageSetBuffers)
+			for(size_t antenna1=0; antenna1!=_file->NAntennas(); ++antenna1)
 			{
-				for(size_t ch=0; ch!=_file->NChannels(); ++ch)
+				for(size_t antenna2=0; antenna2<=antenna1; ++antenna2)
 				{
-					for(size_t p=0; p!=4; ++p)
+					size_t bIndex = baselineMap[antenna1 + antenna2*_file->NAntennas()];
+					ImageSet& imageSet = _imageSetBuffers[bIndex];
+					for(size_t ch=0; ch!=_file->NChannels(); ++ch)
 					{
-						float
-							*realPtr = imageSet.ImageBuffer(p*2)+bufferIndex,
-							*imagPtr = imageSet.ImageBuffer(p*2+1)+bufferIndex;
-						realPtr[ch*imageSet.HorizontalStride()] = visPtr->real();
-						imagPtr[ch*imageSet.HorizontalStride()] = visPtr->imag();
-						++visPtr;
+						for(size_t p=0; p!=4; ++p)
+						{
+							float
+								*realPtr = imageSet.ImageBuffer(p*2)+bufferIndex,
+								*imagPtr = imageSet.ImageBuffer(p*2+1)+bufferIndex;
+							realPtr[ch*imageSet.HorizontalStride()] = visPtr->real();
+							imagPtr[ch*imageSet.HorizontalStride()] = visPtr->imag();
+							++visPtr;
+						}
 					}
 				}
 			}
@@ -252,11 +291,12 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 		{
 			for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
 			{
-				_flagBuffers.emplace_back(_flagger.MakeFlagMask(chunkEnd-chunkStart, _file->NChannels(), true));
+				_flagBuffers.emplace_back(_flagger.MakeFlagMask(chunkEnd-chunkStart, _file->NChannels(), false));
 			}
 		}
 		
 		progress = ProgressBar("Writing");
+		_writeWatch.Start();
 		_outputFlags.resize(_file->NChannels()*4);
 		_outputData = make_aligned<std::complex<float>>(_file->NChannels()*4, 16);
 		_outputWeights = make_aligned<float>(_file->NChannels()*4, 16);
@@ -265,9 +305,12 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename)
 			progress.SetProgress(timeIndex-chunkStart, chunkEnd-chunkStart);
 			processAndWriteTimestep(timeIndex, chunkStart);
 		}
+		_writeWatch.Pause();
 		
 		_flagBuffers.clear();
 	}
+	
+	std::cout << "Read: " << _readWatch.ToString() << ", processing: " << _processWatch.ToString() << ", writing: " << _writeWatch.ToString() << '\n';
 }
 
 void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
@@ -296,6 +339,10 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 	
 	_writer->AddRows(nBaselines);
 	
+	ao::uvector<double>
+		cosAngles(nChannels),
+		sinAngles(nChannels);
+	
 	initializeWeights(_outputWeights.get(), timestep.endTime-timestep.startTime);
 	size_t baselineIndex = 0;
 	for(size_t antenna1=0; antenna1!=nAntennas; ++antenna1)
@@ -312,6 +359,14 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 				v = _uvws[antenna1].v - _uvws[antenna2].v,
 				w = _uvws[antenna1].w - _uvws[antenna2].w;
 					
+			// Pre-calculate rotation coefficients for geometric phase delay correction
+			for(size_t ch=0; ch!=nChannels; ++ch)
+			{
+				double angle = -2.0*M_PI*w*_channelFrequenciesHz[ch] / SPEED_OF_LIGHT;
+				sinAngles[ch] = sin(angle);
+				cosAngles[ch] = cos(angle);
+			}
+
 			size_t bufferIndex = timeIndex - chunkStart;
 #ifndef USE_SSE
 			for(size_t p=0; p!=4; ++p)
@@ -324,7 +379,12 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 				bool *outputFlagPtr = &_outputFlags[p];
 				for(size_t ch=0; ch!=nChannels; ++ch)
 				{
-					*outDataPtr = std::complex<float>(*realPtr, *imagPtr);
+					const float rtmp = *realPtr, itmp = *imagPtr;
+					// Apply geometric phase delay (for w)
+					*outDataPtr = std::complex<float>(
+						cosAngles[ch] * rtmp - sinAngles[ch] * itmp,
+						sinAngles[ch] * rtmp + cosAngles[ch] * itmp
+					);
 					*outputFlagPtr = *flagPtr;
 					realPtr += stride;
 					imagPtr += stride;
@@ -348,10 +408,19 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 			bool *outputFlagPtr = &_outputFlags[0];
 			for(size_t ch=0; ch!=nChannels; ++ch)
 			{
-				*outDataPtr = std::complex<float>(*realAPtr, *imagAPtr);
-				*(outDataPtr+1) = std::complex<float>(*realBPtr, *imagBPtr);
-				*(outDataPtr+2) = std::complex<float>(*realCPtr, *imagCPtr);
-				*(outDataPtr+3) = std::complex<float>(*realDPtr, *imagDPtr);
+				// Apply geometric phase delay (for w)
+				// Note that order within set_ps is reversed; for the four complex numbers,
+				// the first two compl are loaded corresponding to set_ps(imag2, real2, imag1, real1).
+				__m128 ra = _mm_set_ps(*realBPtr, *realBPtr, *realAPtr, *realAPtr);
+				__m128 rb = _mm_set_ps(*realDPtr, *realDPtr, *realCPtr, *realCPtr);
+				__m128 rgeom = _mm_set_ps(sinAngles[ch], cosAngles[ch], sinAngles[ch], cosAngles[ch]);
+				__m128 ia = _mm_set_ps(*imagBPtr, *imagBPtr, *imagAPtr, *imagAPtr);
+				__m128 ib = _mm_set_ps(*imagDPtr, *imagDPtr, *imagCPtr, *imagCPtr);
+				__m128 igeom = _mm_set_ps(cosAngles[ch], -sinAngles[ch], cosAngles[ch], -sinAngles[ch]);
+				__m128 outa = _mm_add_ps(_mm_mul_ps(ra, rgeom), _mm_mul_ps(ia, igeom));
+				__m128 outb = _mm_add_ps(_mm_mul_ps(rb, rgeom), _mm_mul_ps(ib, igeom));
+				_mm_store_ps((float*) outDataPtr, outa);
+				_mm_store_ps((float*) (outDataPtr+2), outb);
 				
 				*outputFlagPtr = *flagPtr; ++outputFlagPtr;
 				*outputFlagPtr = *flagPtr; ++outputFlagPtr;

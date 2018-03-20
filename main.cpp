@@ -15,18 +15,23 @@ int main(int argc, char* argv[])
 			++argi;
 			af2ms.SetTimeAveraging(std::atoi(argv[argi]));
 		}
+		else if(param == "interval") {
+			af2ms.SetInterval(std::atoi(argv[argi+1]), std::atoi(argv[argi+2]));
+			argi+=2;
+		}
 		++argi;
 	}
 	
-	if(argi+2 > argc)
+	if(argi+3 > argc)
 	{
-		std::cerr << "Syntax: aartfaac2ms [options] <input.vis> <output.ms>\n"
+		std::cerr << "Syntax: aartfaac2ms [options] <input.vis> <output.ms> <antennas.conf>\n"
 		"  -mem <percentage>\n"
 		"\tLimit memory usage to the given fraction of the total system memory. \n"
-		"  -time-avg <factor>\n";
+		"  -time-avg <factor>\n"
+		"  -interval <start> <end>\n";
 		return 1;
 	}
-	af2ms.Run(argv[argi], argv[argi+1]);
+	af2ms.Run(argv[argi], argv[argi+1], argv[argi+2]);
 	return 0;
 }
 
