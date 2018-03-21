@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <stdexcept>
 
 struct Header {
 	static const uint32_t
