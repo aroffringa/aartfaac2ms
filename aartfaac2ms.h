@@ -5,12 +5,16 @@
 
 #include "aartfaacfile.h"
 #include "aligned_ptr.h"
+#include "antennaconfig.h"
 #include "averagingwriter.h"
 #include "stopwatch.h"
 #include "progressbar.h"
 #include "writer.h"
 
 #include "aocommon/uvector.h"
+
+#include <casacore/measures/Measures/MDirection.h>
+#include <casacore/measures/Measures/MPosition.h>
 
 #include <complex>
 #include <map>
@@ -19,7 +23,7 @@
 
 struct UVW { double u, v, w; };
 
-class Aartfaac2ms : private UVWCalculater
+class Aartfaac2ms
 {
 public:
 	enum OutputFormat { MSOutputFormat, FitsOutputFormat };
@@ -37,7 +41,7 @@ private:
 	void processAndWriteTimestep(size_t timeIndex, size_t chunkStart);
 	void initializeWriter(const char* outputFilename);
 	void initializeWeights(float* outputWeights, double integrationTime);
-	virtual void CalculateUVW(double date, size_t antenna1, size_t antenna2, double &u, double &v, double &w);
+	void readAntennaPositions(const char* antennaConfFilename);
 	
 	void setAntennas();
 	void setSPWs();
@@ -77,6 +81,8 @@ private:
 	std::vector<aoflagger::FlagMask> _flagBuffers;
 	std::vector<Timestep> _timesteps;
 	std::vector<UVW> _uvws;
+	std::vector<casacore::MPosition> _antennaPositions;
+	casacore::MDirection _phaseDirection;
 	ao::uvector<double> _channelFrequenciesHz;
 	
 	// write buffers

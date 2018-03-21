@@ -57,6 +57,9 @@ void AveragingWriter::WriteRow(double time, double timeCentroid, size_t antenna1
 #endif
 	}
 	buffer._rowTime += time;
+	buffer._rowU += u;
+	buffer._rowV += v;
+	buffer._rowW += w;
 	buffer._rowTimestepCount++;
 	buffer._interval += interval;
 	

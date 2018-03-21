@@ -7,7 +7,11 @@
 #include <locale>
 #include <vector>
 #include <sstream>
+#include <map>
 #include <numeric>
+#include <string>
+
+struct Position { double x, y, z; };
 
 class AntennaConfig
 {
@@ -17,11 +21,10 @@ public:
 		std::string name, band;
 		std::vector<double> data;
 	};
-	
+		
 	AntennaConfig(const char* filename) : _str(filename)
 	{
 		next();
-		std::map<std::string, Array> values;
 		struct Array a;
 		while(ReadArray(a.name, a.band, a.data))
 		{
@@ -31,8 +34,24 @@ public:
 			else
 				key = a.band+"_"+a.name;
 			std::cout << "Read values for " << key << '\n';
-			values.insert(std::make_pair(key, a));
+			_values.insert(std::make_pair(key, a));
 		}
+	}
+	
+	const std::vector<double>& GetArray(const std::string& name) const
+	{
+		return _values.find(name)->second.data;
+	}
+	
+	std::vector<Position> GetLBAPositions() const
+	{
+		const std::vector<double>& arr = GetArray("LBA");
+		std::vector<Position> pos;
+		for(size_t index=0; index<arr.size(); index+=6)
+		{
+			pos.emplace_back(Position{arr[index], arr[index+1], arr[index+2]});
+		}
+		return pos;
 	}
 	
 private:
@@ -89,7 +108,6 @@ private:
 			else if(_token != "[")
 				throw std::runtime_error("Antenna config file has bad format");
 		} while(_token != "[");
-		next();
 		return dimensions;
 	}
 	
@@ -103,6 +121,7 @@ private:
 				throw std::runtime_error("Missing numbers");
 			values[i] = std::atof(_token.c_str());
 		}
+		next(); // move TO ']'
 		return values;
 	}
 	
@@ -160,6 +179,8 @@ private:
 		ltrim(s);
 		rtrim(s);
 	}
+	
+	std::map<std::string, Array> _values;
 	
 	std::ifstream _str;
 	std::string _line;

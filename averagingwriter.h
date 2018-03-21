@@ -15,9 +15,9 @@ class UVWCalculater
 class AveragingWriter : public Writer
 {
 	public:
-		AveragingWriter(std::unique_ptr<Writer>&& writer, size_t timeCount, size_t freqAvgFactor, UVWCalculater &uvwCalculater)
+		AveragingWriter(std::unique_ptr<Writer>&& writer, size_t timeCount, size_t freqAvgFactor)
 		: _writer(std::move(writer)), _timeAvgFactor(timeCount), _freqAvgFactor(freqAvgFactor), _rowsAdded(0),
-		_originalChannelCount(0), _avgChannelCount(0), _antennaCount(0), _uvwCalculater(uvwCalculater)
+		_originalChannelCount(0), _avgChannelCount(0), _antennaCount(0)
 		{
 		}
 		
@@ -152,6 +152,9 @@ class AveragingWriter : public Writer
 			void initZero(size_t avgChannelCount)
 			{
 				_rowTime = 0.0;
+				_rowU = 0.0;
+				_rowV = 0.0;
+				_rowW = 0.0;
 				_rowTimestepCount = 0;
 				_interval = 0.0;
 				for(size_t ch=0; ch!=avgChannelCount*4; ++ch)
@@ -164,7 +167,7 @@ class AveragingWriter : public Writer
 				}
 			}
 			
-			double _rowTime;
+			double _rowTime, _rowU, _rowV, _rowW;
 			size_t _rowTimestepCount;
 			double _interval;
 			std::complex<float> *_rowData, *_flaggedAndUnflaggedData;
@@ -176,9 +179,11 @@ class AveragingWriter : public Writer
 		void writeCurrentTimestep(size_t antenna1, size_t antenna2)
 		{
 			Buffer& buffer = getBuffer(antenna1, antenna2);
-			double time = buffer._rowTime / buffer._rowTimestepCount;
-			double u, v, w;
-			_uvwCalculater.CalculateUVW(time, antenna1, antenna2, u, v, w);
+			double
+				time = buffer._rowTime / buffer._rowTimestepCount,
+				u = buffer._rowU / buffer._rowTimestepCount,
+				v = buffer._rowV / buffer._rowTimestepCount,
+				w = buffer._rowW / buffer._rowTimestepCount;
 			
 			for(size_t ch=0;ch!=_avgChannelCount*4;++ch)
 			{
@@ -244,7 +249,6 @@ class AveragingWriter : public Writer
 		std::unique_ptr<Writer> _writer;
 		size_t _timeAvgFactor, _freqAvgFactor, _rowsAdded;
 		size_t _originalChannelCount, _avgChannelCount, _antennaCount;
-		UVWCalculater &_uvwCalculater;
 		std::vector<Buffer*> _buffers;
 };
 

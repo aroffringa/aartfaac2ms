@@ -89,7 +89,7 @@ void MSWriter::initialize()
 	tableDesc.rwColumnDesc("FLAG").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
 	tableDesc.rwColumnDesc("UVW").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
 	tableDesc.rwColumnDesc("FLAG_CATEGORY").setShape(IPosition(3,0,0,0));
-	tableDesc.rwColumnDesc("FLAG_CATEGORY").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
+	//tableDesc.rwColumnDesc("FLAG_CATEGORY").setOptions(ColumnDesc::Option::FixedShape | ColumnDesc::Option::Direct);
 	
 	DataManagerCtor dyscoConstructor = 0;
 	Record dyscoSpec;
@@ -99,8 +99,6 @@ void MSWriter::initialize()
 	}
 	
 	SetupNewTable newTab(_filename, tableDesc, Table::New);
-	//Record dminfo = temptable.dataManagerInfo();
-	//dminfo = DataManInfo::adjustStMan (dminfo, "IncrementalStMan");
 	IncrementalStMan stman;
 	newTab.bindColumn("TIME", stman);
 	newTab.bindColumn("TIME_CENTROID", stman);

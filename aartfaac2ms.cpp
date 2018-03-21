@@ -1,10 +1,19 @@
 #include "aartfaac2ms.h"
 
-#include "antennaconfig.h"
 #include "averagingwriter.h"
 #include "fitswriter.h"
 #include "mswriter.h"
 #include "threadedwriter.h"
+
+#include "units/radeccoord.h"
+
+#include <casacore/measures/Measures/MBaseline.h>
+#include <casacore/measures/Measures/MCBaseline.h>
+#include <casacore/measures/Measures/MCDirection.h>
+#include <casacore/measures/Measures/MeasConvert.h>
+#include <casacore/measures/Measures/MEpoch.h>
+#include <casacore/measures/Measures/MPosition.h>
+#include <casacore/measures/Measures/Muvw.h>
 
 #include <complex>
 #include <iostream>
@@ -99,7 +108,7 @@ void Aartfaac2ms::initializeWriter(const char* outputFilename)
 	
 	if(_freqAvgFactor != 1 || _timeAvgFactor != 1)
 	{
-		_writer.reset(new ThreadedWriter(std::unique_ptr<Writer>(new AveragingWriter(std::move(_writer), _timeAvgFactor, _freqAvgFactor, *this))));
+		_writer.reset(new ThreadedWriter(std::unique_ptr<Writer>(new AveragingWriter(std::move(_writer), _timeAvgFactor, _freqAvgFactor))));
 	}
 	
 	setAntennas();
@@ -206,9 +215,10 @@ void Aartfaac2ms::setObservation()
 
 void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename)
 {
-	AntennaConfig antConf(antennaConfFilename);
-	
 	_file.reset(new AartfaacFile(inputFilename));
+	
+	readAntennaPositions(antennaConfFilename);
+	
 	ao::uvector<std::complex<float>> vis(_file->VisPerTimestep());
 	size_t index = 0;
 	
@@ -313,6 +323,19 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 	std::cout << "Read: " << _readWatch.ToString() << ", processing: " << _processWatch.ToString() << ", writing: " << _writeWatch.ToString() << '\n';
 }
 
+casacore::Muvw calculateUVW(const casacore::MPosition &antennaPos, const casacore::MPosition &refPos,
+	const casacore::MEpoch &time, const casacore::MDirection &direction)
+{
+	const casacore::Vector<double> posVec = antennaPos.getValue().getVector();
+	const casacore::Vector<double> refVec = refPos.getValue().getVector();
+	casacore::MVPosition relativePos(posVec[0]-refVec[0], posVec[1]-refVec[1], posVec[2]-refVec[2]);
+	casacore::MeasFrame frame(time, refPos, direction);
+	casacore::MBaseline baseline(casacore::MVBaseline(relativePos), casacore::MBaseline::Ref(casacore::MBaseline::ITRF, frame));
+	casacore::MBaseline j2000Baseline = casacore::MBaseline::Convert(baseline, casacore::MBaseline::J2000)();
+	casacore::MVuvw uvw(j2000Baseline.getValue(), direction.getValue());
+	return casacore::Muvw(uvw, casacore::Muvw::J2000);
+}
+
 void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 {
 	const size_t nAntennas = _file->NAntennas();
@@ -325,17 +348,14 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 	//Geometry::PrepareTimestepUVW(uvwInfo, dateMJD, _mwaConfig.ArrayLongitudeRad(), _mwaConfig.ArrayLattitudeRad(), _mwaConfig.Header().raHrs, _mwaConfig.Header().decDegs);
 	
 	//TODO calculate actual UVW values
-	_uvws.assign(_file->NAntennas(), UVW{0.0, 0.0, 0.0});
+	_uvws.resize(_file->NAntennas());
 	
-	/*double antU[antennaCount], antV[antennaCount], antW[antennaCount];
-	for(size_t antenna=0; antenna!=antennaCount; ++antenna)
+	casacore::MEpoch timeEpoch = casacore::MEpoch(casacore::MVEpoch(timestep.startTime/86400.0), casacore::MEpoch::UTC);
+	for(size_t antenna=0; antenna!=nAntennas; ++antenna)
 	{
-		const double
-			x = _mwaConfig.Antenna(antenna).position[0],
-			y = _mwaConfig.Antenna(antenna).position[1],
-			z = _mwaConfig.Antenna(antenna).position[2];
-		Geometry::CalcUVW(uvwInfo, x, y, z, antU[antenna],antV[antenna], antW[antenna]);
-	}*/
+		casacore::MVuvw uvw = calculateUVW(_antennaPositions[antenna], _antennaPositions[0], timeEpoch, _phaseDirection).getValue();
+		_uvws[antenna] = UVW { uvw.getVector()[0], uvw.getVector()[1], uvw.getVector()[2] };
+	}
 	
 	_writer->AddRows(nBaselines);
 	
@@ -440,6 +460,32 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 		}
 	}
 }
+#include <casacore/measures/Measures/MBaseline.h>
+void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
+{
+	AntennaConfig antConf(antennaConfFilename);
+	std::vector<Position> positions = antConf.GetLBAPositions();
+	for(const Position& p : positions)
+	{
+		casacore::MPosition();
+		_antennaPositions.emplace_back(
+			casacore::MVPosition(p.x, p.y, p.z),
+			casacore::MPosition::ITRF);
+	}
+	
+	double centralTime = _file->CentralTime();
+	casacore::MEpoch time = casacore::MEpoch(casacore::MVEpoch(centralTime/86400.0), casacore::MEpoch::UTC);
+	casacore::MeasFrame frame(_antennaPositions[0], time);
+	std::cout << "Position: " << _antennaPositions[0] << ", frame: " << frame << '\n';
+
+	const casacore::MDirection::Ref azelRef(casacore::MDirection::AZEL, frame);
+	const casacore::MDirection::Ref j2000Ref(casacore::MDirection::J2000, frame);
+	casacore::MDirection zenithAzEl(casacore::MVDirection(0.0, 0.0, 1.0), azelRef);
+	_phaseDirection = casacore::MDirection::Convert(zenithAzEl, j2000Ref)();
+	double ra = _phaseDirection.getAngle().getValue()[0];
+	double dec = _phaseDirection.getAngle().getValue()[1];
+	std::cout << "Central time: " << time << ", corresponding phase centre: " << RaDecCoord::RaDecToString(ra, dec) << '\n';
+}
 
 void Aartfaac2ms::initializeWeights(float* outputWeights, double integrationTime)
 {
@@ -452,10 +498,4 @@ void Aartfaac2ms::initializeWeights(float* outputWeights, double integrationTime
 		for(size_t p=0; p!=4; ++p)
 			outputWeights[ch*4 + p] = weightFactor;
 	}
-}
-
-void Aartfaac2ms::CalculateUVW(double date, size_t antenna1, size_t antenna2, double& u, double& v, double& w)
-{
-	u=0.0; v=0.0; w=0.0;
-	// TODO
 }
