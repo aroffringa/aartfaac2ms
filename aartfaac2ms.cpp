@@ -33,7 +33,7 @@ Aartfaac2ms::Aartfaac2ms() :
 	_outputFormat(MSOutputFormat),
 	_rfiDetection(false),
 	_timeAvgFactor(1), _freqAvgFactor(1),
-	_memPercentage(90),
+	_memPercentage(50),
 	_intervalStart(0), _intervalEnd(0),
 	_useDysco(false),
 	_dyscoDataBitRate(8),

@@ -34,7 +34,17 @@ public:
 	
 	void SetMemPercentage(double memPercentage) { _memPercentage = memPercentage; }
 	void SetTimeAveraging(size_t factor) { _timeAvgFactor = factor; }
+	void SetFrequencyAveraging(size_t factor) { _freqAvgFactor = factor; }
 	void SetInterval(size_t start, size_t end) { _intervalStart = start; _intervalEnd = end; }
+	void SetUseDysco(bool useDysco) { _useDysco = useDysco; }
+	void SetAdvancedDyscoOptions(size_t dataBitRate, size_t weightBitRate, const std::string& distribution, double distTruncation, const std::string& normalization)
+	{
+		_dyscoDataBitRate = dataBitRate;
+		_dyscoWeightBitRate = weightBitRate;
+		_dyscoDistribution = distribution;
+		_dyscoDistTruncation = distTruncation;
+		_dyscoNormalization = normalization;
+	}
 	
 private:
 	void allocateBuffers();
