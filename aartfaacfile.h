@@ -5,7 +5,6 @@
 #include <complex>
 #include <fstream>
 #include <sstream>
-#include <iostream>
 #include <stdexcept>
 
 struct Header {
@@ -67,11 +66,7 @@ public:
 		// Read first header
 		_file.seekg(0, std::ios::beg);
 		_file.read(reinterpret_cast<char*>(&_header), sizeof(Header));
-		std::cout << _header.ToString();
 		_blockSize = sizeof(std::complex<float>) * VisPerTimestep();
-		std::cout << "buffersize=" << _blockSize << " (%512=" << (_blockSize%512) << ")\n";
-		std::cout << "filesize=" << _filesize << '\n';
-		std::cout << "nblocks=" << _filesize / (_blockSize+512) << "(%=" << _filesize%(_blockSize+512) << ")\n";
 		
 		// Read middle timestep to get central time of obs
 		SeekToTimestep(NTimesteps()/2);
@@ -110,7 +105,6 @@ public:
 	{
 		Header h;
 		_file.read(reinterpret_cast<char*>(&h), sizeof(Header));
-		//std::cout << h.ToString() << '\n';
 		_file.read(reinterpret_cast<char*>(buffer), _blockSize);
 		if(!_file)
 			throw std::runtime_error("Error reading file");

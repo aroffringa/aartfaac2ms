@@ -6,7 +6,7 @@ int main(int argc, char* argv[])
 {
 	std::cout << "Running Aartfaac preprocessing pipeline, version " << AF2MS_VERSION_STR <<
 		" (" << AF2MS_VERSION_DATE << ").\n"
-		"Flagging is performed by AOFlagger " << aoflagger::AOFlagger::GetVersionString() << " (" << aoflagger::AOFlagger::GetVersionDate() << ").\n";
+		"Flagging is performed using AOFlagger " << aoflagger::AOFlagger::GetVersionString() << " (" << aoflagger::AOFlagger::GetVersionDate() << ").\n";
 		
 	int argi=1;
 	Aartfaac2ms af2ms;

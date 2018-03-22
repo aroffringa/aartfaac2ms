@@ -33,7 +33,6 @@ public:
 				key = a.name;
 			else
 				key = a.band+"_"+a.name;
-			std::cout << "Read values for " << key << '\n';
 			_values.insert(std::make_pair(key, a));
 		}
 	}
