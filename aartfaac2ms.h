@@ -36,6 +36,11 @@ public:
 	void SetTimeAveraging(size_t factor) { _timeAvgFactor = factor; }
 	void SetFrequencyAveraging(size_t factor) { _freqAvgFactor = factor; }
 	void SetInterval(size_t start, size_t end) { _intervalStart = start; _intervalEnd = end; }
+	void SetPhaseCentre(double ra, double dec) {
+		_manualPhaseCentre = true;
+		_manualPhaseCentreRA = ra;
+		_manualPhaseCentreDec = dec;
+	}
 	void SetUseDysco(bool useDysco) { _useDysco = useDysco; }
 	void SetAdvancedDyscoOptions(size_t dataBitRate, size_t weightBitRate, const std::string& distribution, double distTruncation, const std::string& normalization)
 	{
@@ -78,6 +83,8 @@ private:
 	size_t _timeAvgFactor, _freqAvgFactor;
 	double _memPercentage;
 	size_t _intervalStart, _intervalEnd;
+	bool _manualPhaseCentre;
+	double _manualPhaseCentreRA, _manualPhaseCentreDec;
 	bool _useDysco;
 	size_t _dyscoDataBitRate;
 	size_t _dyscoWeightBitRate;

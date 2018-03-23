@@ -125,6 +125,7 @@ public:
 	
 	size_t NChannels() const { return _header.nrChannels; }
 	size_t NAntennas() const { return _header.nrReceivers; }
+	uint8_t CorrelationMode() const { return _header.correlationMode; }
 	
 	double Bandwidth() const { return 195312.5; }
 	double StartTime() const { return TimeToCasa(_header.startTime); }

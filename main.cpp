@@ -2,6 +2,8 @@
 
 #include "version.h"
 
+#include "units/radeccoord.h"
+
 int main(int argc, char* argv[])
 {
 	std::cout << "Running Aartfaac preprocessing pipeline, version " << AF2MS_VERSION_STR <<
@@ -29,6 +31,13 @@ int main(int argc, char* argv[])
 			af2ms.SetInterval(std::atoi(argv[argi+1]), std::atoi(argv[argi+2]));
 			argi+=2;
 		}
+		else if(param == "centre") {
+			++argi;
+			long double centreRA = RaDecCoord::ParseRA(argv[argi]);
+			++argi;
+			long double centreDec = RaDecCoord::ParseDec(argv[argi]);
+			af2ms.SetPhaseCentre(centreRA, centreDec);
+		}
 		else if(param == "use-dysco")
 		{
 			af2ms.SetUseDysco(true);
@@ -53,6 +62,8 @@ int main(int argc, char* argv[])
 		"\tAverage in frequency (after flagging).\n"
 		"  -interval <start> <end>\n"
 		"\tOnly convert the selected timesteps.\n"
+		"  -centre <ra> <dec>\n"
+		"\tSet alternative phase centre, e.g. -centre 00h00m00.0s 00d00m00.0s.\n"
 		"  -use-dysco\n"
 		"\tCompress the measurement set with Dysco, using default settings (unless\n"
 		"\tspecified with -dysco-config).\n"

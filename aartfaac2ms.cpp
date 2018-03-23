@@ -35,6 +35,9 @@ Aartfaac2ms::Aartfaac2ms() :
 	_timeAvgFactor(1), _freqAvgFactor(1),
 	_memPercentage(50),
 	_intervalStart(0), _intervalEnd(0),
+	_manualPhaseCentre(false),
+	_manualPhaseCentreRA(0.0),
+	_manualPhaseCentreDec(0.0),
 	_useDysco(false),
 	_dyscoDataBitRate(8),
 	_dyscoWeightBitRate(12),
@@ -173,8 +176,10 @@ void Aartfaac2ms::setSource()
 	source.name = "AARTFAAC";
 	source.calibrationGroup = 0;
 	source.code = "";
-	source.directionRA = 0.0; // TODO (in radians)
-	source.directionDec = 0.0;
+	double ra = _phaseDirection.getAngle().getValue()[0];
+	double dec = _phaseDirection.getAngle().getValue()[1];
+	source.directionRA = ra; // (in radians)
+	source.directionDec = dec;
 	source.properMotion[0] = 0.0;
 	source.properMotion[1] = 0.0;
 	_writer->WriteSource(source);
@@ -187,8 +192,10 @@ void Aartfaac2ms::setField()
 	field.code = std::string();
 	field.time = _file->StartTime();
 	field.numPoly = 0;
-	field.delayDirRA = 0.0; // TODO (in radians)
-	field.delayDirDec = 0.0;
+	double ra = _phaseDirection.getAngle().getValue()[0];
+	double dec = _phaseDirection.getAngle().getValue()[1];
+	field.delayDirRA = ra; // (in radians)
+	field.delayDirDec = dec;
 	field.phaseDirRA = field.delayDirRA;
 	field.phaseDirDec = field.delayDirDec;
 	field.referenceDirRA = field.delayDirRA;
@@ -216,6 +223,7 @@ void Aartfaac2ms::setObservation()
 void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename)
 {
 	_file.reset(new AartfaacFile(inputFilename));
+	std::cout << "Correlation mode: " << int(_file->CorrelationMode()) << '\n';
 	
 	readAntennaPositions(antennaConfFilename);
 	
@@ -476,7 +484,6 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 	double centralTime = _file->CentralTime();
 	casacore::MEpoch time = casacore::MEpoch(casacore::MVEpoch(centralTime/86400.0), casacore::MEpoch::UTC);
 	casacore::MeasFrame frame(_antennaPositions[0], time);
-	std::cout << "Position: " << _antennaPositions[0] << ", frame: " << frame << '\n';
 
 	const casacore::MDirection::Ref azelRef(casacore::MDirection::AZEL, frame);
 	const casacore::MDirection::Ref j2000Ref(casacore::MDirection::J2000, frame);
@@ -484,7 +491,16 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 	_phaseDirection = casacore::MDirection::Convert(zenithAzEl, j2000Ref)();
 	double ra = _phaseDirection.getAngle().getValue()[0];
 	double dec = _phaseDirection.getAngle().getValue()[1];
-	std::cout << "Central time: " << time << ", corresponding phase centre: " << RaDecCoord::RaDecToString(ra, dec) << '\n';
+	std::cout << "Central time: " << time << ", zenith direction: " << RaDecCoord::RaDecToString(ra, dec) << '\n';
+	if(_manualPhaseCentre) {
+		_phaseDirection.getAngle().getValue()[0] = _manualPhaseCentreRA;
+		_phaseDirection.getAngle().getValue()[1] = _manualPhaseCentreDec;
+		std::cout << "Using manual phase centre: "
+			<< RaDecCoord::RaDecToString(ra, dec) << '\n';
+	}
+	else {
+		std::cout << "Zenith direction at central time is used as phase direction.\n";
+	}
 }
 
 void Aartfaac2ms::initializeWeights(float* outputWeights, double integrationTime)
