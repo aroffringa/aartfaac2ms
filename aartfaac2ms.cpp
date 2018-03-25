@@ -208,7 +208,7 @@ void Aartfaac2ms::setField()
 void Aartfaac2ms::setObservation()
 {
 	Writer::ObservationInfo observation;
-	observation.telescopeName = "MWA";
+	observation.telescopeName = "AARTFAAC";
 	observation.startTime = _file->StartTime();
 	observation.endTime = _file->StartTime() + _file->IntegrationTime()*_file->NTimesteps();
 	observation.observer = "Unknown";
@@ -352,12 +352,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 	const Timestep& timestep = _timesteps[timeIndex - chunkStart];
 	const double startTime = timestep.startTime;
 	
-	//Geometry::UVWTimestepInfo uvwInfo;
-	//Geometry::PrepareTimestepUVW(uvwInfo, dateMJD, _mwaConfig.ArrayLongitudeRad(), _mwaConfig.ArrayLattitudeRad(), _mwaConfig.Header().raHrs, _mwaConfig.Header().decDegs);
-	
-	//TODO calculate actual UVW values
 	_uvws.resize(_file->NAntennas());
-	
 	casacore::MEpoch timeEpoch = casacore::MEpoch(casacore::MVEpoch(timestep.startTime/86400.0), casacore::MEpoch::UTC);
 	for(size_t antenna=0; antenna!=nAntennas; ++antenna)
 	{
