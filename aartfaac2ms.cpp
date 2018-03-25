@@ -220,9 +220,9 @@ void Aartfaac2ms::setObservation()
 	_writer->WriteObservation(observation);
 }
 
-void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename)
+void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename, AartfaacMode mode)
 {
-	_file.reset(new AartfaacFile(inputFilename));
+	_file.reset(new AartfaacFile(inputFilename, mode));
 	std::cout << "Correlation mode: " << int(_file->CorrelationMode()) << '\n';
 	
 	readAntennaPositions(antennaConfFilename);

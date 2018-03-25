@@ -12,12 +12,19 @@ int main(int argc, char* argv[])
 		
 	int argi=1;
 	Aartfaac2ms af2ms;
+	AartfaacMode mode(AartfaacMode::Unused);
 	while(argi<argc && argv[argi][0] == '-')
 	{
 		std::string param(&argv[argi][1]);
 		if(param == "mem") {
 			++argi;
 			af2ms.SetMemPercentage(std::atoi(argv[argi]));
+		}
+		else if(param == "mode") {
+			++argi;
+			mode = AartfaacMode::FromNumber(std::atoi(argv[argi]));
+			if(mode == AartfaacMode::Unused)
+				throw std::runtime_error("Invalid mode. Valid modes are 1-7.");
 		}
 		else if(param == "time-avg") {
 			++argi;
@@ -56,6 +63,8 @@ int main(int argc, char* argv[])
 		"Options:\n"
 		"  -mem <percentage>\n"
 		"\tLimit memory usage to the given fraction of the total system memory. \n"
+		"  -mode <number>\n"
+		"\tSet correlator mode (1-4: LBA, 5-7: HBA).\n"
 		"  -time-avg <factor>\n"
 		"\tAverage in time (after flagging).\n"
 		"  -freq-avg <factor>\n"
@@ -71,7 +80,8 @@ int main(int argc, char* argv[])
 		"\tOverride default dysco settings\n";
 		return 1;
 	}
-	af2ms.Run(argv[argi], argv[argi+1], argv[argi+2]);
+	if(mode == AartfaacMode::Unused)
+		throw std::runtime_error("Mode not set. Valid modes are 1-7.");
+	af2ms.Run(argv[argi], argv[argi+1], argv[argi+2], mode);
 	return 0;
 }
-

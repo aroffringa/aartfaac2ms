@@ -1,77 +1,38 @@
 #ifndef AARTFAAC_FILE_H
 #define AARTFAAC_FILE_H
 
+#include "aartfaacheader.h"
+#include "aartfaacmode.h"
+
 #include <cstdint>
 #include <complex>
 #include <fstream>
-#include <sstream>
 #include <stdexcept>
-
-struct Header {
-	static const uint32_t
-		CORR_HDR_MAGIC= 0x000000003B98F002; // Magic number in raw corr visibilities.
-	
-	uint32_t magic;
-	uint16_t nrReceivers;
-	uint8_t  nrPolarizations;
-	uint8_t  correlationMode;
-	double   startTime, endTime;
-	uint32_t weights[78]; // Fixed-sized field, independent of #stations!
-	uint32_t nrSamplesPerIntegration;
-	uint16_t nrChannels;
-
-	char     pad1[170];
-	
-	std::string ToString() {
-		std::ostringstream str;
-		str
-		<< "magic = " << magic << ' ';
-		switch(magic) {
-			case CORR_HDR_MAGIC: str << "CORR_HDR_MAGIC" << '\n'; break;
-			default: str << "????\n"; break;
-		}
-		str
-		<< "nrReceivers = " << nrReceivers << '\n'
-		<< "nrPolarizations = " << unsigned(nrPolarizations) << '\n'
-		<< "correlationMode = " << unsigned(correlationMode) << '\n'
-		<< "startTime = " << startTime << '\n'
-		<< "endTime = " << endTime << " (total: " << (endTime-startTime) << " s)\n"
-		<< "weights = [" << weights[0];
-		for(size_t i=1; i!=78; ++i)
-			str << ", " << weights[i];
-		str
-		<< "]\nnrSamplesPerIntegration = " << nrSamplesPerIntegration << '\n'
-		<< "nrChannels = " << nrChannels << '\n';
-		return str.str();
-	}
-};
 
 struct Timestep
 {
 	double startTime, endTime;
 };
 
-static_assert(sizeof(Header) == 512, "Header should be of size 512 bytes");
-
 // An AARTFAAC file has a header followed by the data, which is written as:
 // std::complex<float> visibilities[nr_baselines][nr_channels][nr_pols][nr_pols];
 class AartfaacFile {
 public:
-	AartfaacFile(const char* filename) :
-		_file(filename), _blockPos(0)
+	AartfaacFile(const char* filename, AartfaacMode mode) :
+		_file(filename), _mode(mode), _blockPos(0)
 	{
 		_file.seekg(0, std::ios::end);
 		_filesize = _file.tellg();
 		
 		// Read first header
 		_file.seekg(0, std::ios::beg);
-		_file.read(reinterpret_cast<char*>(&_header), sizeof(Header));
+		_file.read(reinterpret_cast<char*>(&_header), sizeof(AartfaacHeader));
 		_blockSize = sizeof(std::complex<float>) * VisPerTimestep();
 		
 		// Read middle timestep to get central time of obs
 		SeekToTimestep(NTimesteps()/2);
-		Header midHeader;
-		_file.read(reinterpret_cast<char*>(&midHeader), sizeof(Header));
+		AartfaacHeader midHeader;
+		_file.read(reinterpret_cast<char*>(&midHeader), sizeof(AartfaacHeader));
 		_centralCasaTime = TimeToCasa(midHeader.startTime);
 		
 		std::string fn(filename);
@@ -91,20 +52,20 @@ public:
 	
 	void SkipTimesteps(int count)
 	{
-		_file.seekg(count * (sizeof(Header) + _blockSize), std::ios::cur);
+		_file.seekg(count * (sizeof(AartfaacHeader) + _blockSize), std::ios::cur);
 		_blockPos += count;
 	}
 	
 	void SeekToTimestep(size_t timestep)
 	{
-		_file.seekg(timestep * (sizeof(Header) + _blockSize), std::ios::beg);
+		_file.seekg(timestep * (sizeof(AartfaacHeader) + _blockSize), std::ios::beg);
 		_blockPos = timestep;
 	}
 	
 	Timestep ReadTimestep(std::complex<float>* buffer)
 	{
-		Header h;
-		_file.read(reinterpret_cast<char*>(&h), sizeof(Header));
+		AartfaacHeader h;
+		_file.read(reinterpret_cast<char*>(&h), sizeof(AartfaacHeader));
 		_file.read(reinterpret_cast<char*>(buffer), _blockSize);
 		if(!_file)
 			throw std::runtime_error("Error reading file");
@@ -142,7 +103,8 @@ public:
 	}
 private:
 	std::ifstream _file;
-	Header _header;
+	AartfaacHeader _header;
+	AartfaacMode _mode;
 	size_t _blockSize, _filesize, _blockPos, _sbIndex;
 	double _centralCasaTime;
 };

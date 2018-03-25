@@ -30,7 +30,7 @@ public:
 		
 	Aartfaac2ms();
 	
-	void Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename);
+	void Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename, AartfaacMode mode);
 	
 	void SetMemPercentage(double memPercentage) { _memPercentage = memPercentage; }
 	void SetTimeAveraging(size_t factor) { _timeAvgFactor = factor; }
