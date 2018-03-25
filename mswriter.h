@@ -5,6 +5,7 @@
 
 #include <complex>
 #include <vector>
+#include <memory>
 #include <string>
 
 class MSWriter : public Writer
@@ -41,10 +42,11 @@ class MSWriter : public Writer
 		void writeObservation();
 		void writeHistoryItem();
 		void initialize();
+		void flush();
 		
-		class MSWriterData *_data;
+		std::unique_ptr<class MSWriterData> _data;
 		bool _isInitialized;
-		size_t _rowIndex;
+		size_t _rowIndex, _sliceStart;
 		
 		std::string _filename;
 		bool _useDysco;
@@ -67,6 +69,7 @@ class MSWriter : public Writer
 		ObservationInfo _observation;
 		std::string _historyCommandLine, _historyApplication;
 		std::vector<std::string> _historyParams;
+		bool _flushNeeded;
 };
 
 #endif

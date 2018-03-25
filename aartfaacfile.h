@@ -41,6 +41,16 @@ public:
 			throw std::runtime_error("Filename should have subband index preceded by 'SB' in it");
 		_sbIndex = std::stoi(fn.substr(sbIndex+2, 3));
 		
+		double frequencyOffset = 0.0;
+		switch(mode.mode) {
+			case AartfaacMode::HBA110_190:
+				frequencyOffset = 100e6;
+				break;
+			default:
+				throw std::runtime_error("Don't know how to handle this mode: not implemented yet");
+		}
+		_frequency = Bandwidth() *  _sbIndex + frequencyOffset;
+		
 		SeekToTimestep(0);
 	}
 	
@@ -91,7 +101,7 @@ public:
 	double Bandwidth() const { return 195312.5; }
 	double StartTime() const { return TimeToCasa(_header.startTime); }
 	double CentralTime() const { return _centralCasaTime; }
-	double Frequency() const { return Bandwidth() *  _sbIndex; }
+	double Frequency() const { return _frequency; }
 	double IntegrationTime() const { return _header.endTime-_header.startTime; }
 	
 	/**
@@ -106,6 +116,7 @@ private:
 	AartfaacHeader _header;
 	AartfaacMode _mode;
 	size_t _blockSize, _filesize, _blockPos, _sbIndex;
+	double _frequency;
 	double _centralCasaTime;
 };
 

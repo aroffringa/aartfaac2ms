@@ -9,6 +9,9 @@
 #include <casacore/tables/Tables/ScalarColumn.h>
 #include <casacore/tables/Tables/SetupNewTab.h>
 #include <casacore/casa/Containers/Record.h>
+
+#include <casacore/casa/Arrays/Cube.h>
+
 #include <casacore/measures/TableMeasures/TableMeasDesc.h>
 
 #include <casacore/measures/Measures/MFrequency.h>
@@ -34,7 +37,13 @@ class MSWriterData
 		ArrayColumn<float> _weightSpectrumCol;
 		
 		casacore::Vector<float> _sigmaArr;
-		casacore::Vector<float> _weightsArr;
+		
+		casacore::Vector<int> _ant1Slice, _ant2Slice;
+		casacore::Matrix<double> _uvwSlice;
+		casacore::Cube<casacore::Complex> _dataSlice;
+		casacore::Cube<bool> _flagSlice;
+		casacore::Cube<float> _weightSpectrumSlice;
+		casacore::Matrix<float> _weightsSlice;
 
 		size_t _dyscoDataBitRate, _dyscoWeightBitRate;
 		std::string _dyscoDistribution, _dyscoNormalization;
@@ -52,8 +61,10 @@ MSWriter::MSWriter(const std::string& filename) :
 	_data(new MSWriterData()),
 	_isInitialized(false),
 	_rowIndex(0),
+	_sliceStart(0),
 	_filename(filename),
-	_useDysco(false)
+	_useDysco(false),
+	_flushNeeded(false)
 {
 }
 
@@ -61,7 +72,7 @@ MSWriter::~MSWriter()
 {
 	if(!_isInitialized)
 		initialize();
-	delete _data;
+	flush();
 }
 
 void MSWriter::EnableCompression(size_t dataBitRate, size_t weightBitRate, const std::string& distribution, double distTruncation, const std::string& normalization)
@@ -183,7 +194,6 @@ void MSWriter::initialize()
 	_data->_flagCol = ArrayColumn<bool>(ms, MS::columnName(casacore::MSMainEnums::FLAG));
 	
 	_data->_sigmaArr = casacore::Vector<float>(4);
-	_data->_weightsArr = casacore::Vector<float>(4);
 	for(size_t p=0; p!=4; ++p) _data->_sigmaArr[p] = 1.0;
 	
 	writeBandInfo();
@@ -526,15 +536,43 @@ void MSWriter::writeObservation()
 
 void MSWriter::AddRows(size_t count)
 {
+	flush();
+	
 	if(!_isInitialized)
 		initialize();
 	_data->_ms.addRow(count);
+
+	size_t nPol = 4;
+	_sliceStart = _rowIndex;
+	_data->_ant1Slice.resize(count);
+	_data->_ant2Slice.resize(count);
+	_data->_uvwSlice.resize(3, count);
+	_data->_dataSlice.resize(nPol, _bandInfo.channels.size(), count);
+	_data->_flagSlice.resize(nPol, _bandInfo.channels.size(), count);
+	_data->_weightSpectrumSlice.resize(nPol, _bandInfo.channels.size(), count);
+	_data->_weightsSlice.resize(nPol, count);
+}
+
+void MSWriter::flush()
+{
+	if(_flushNeeded)
+	{
+		RefRows rows(_sliceStart, _rowIndex-1, 1);
+		_data->_antenna1Col.putColumnCells(rows, _data->_ant1Slice);
+		_data->_antenna2Col.putColumnCells(rows, _data->_ant2Slice);
+		_data->_uvwCol.putColumnCells(rows, _data->_uvwSlice);
+		_data->_dataCol.putColumnCells(rows, _data->_dataSlice);
+		_data->_flagCol.putColumnCells(rows, _data->_flagSlice);
+		_data->_weightSpectrumCol.putColumnCells(rows, _data->_weightSpectrumSlice);
+		_data->_weightCol.putColumnCells(rows, _data->_weightsSlice);
+	
+		_flushNeeded = false;
+	}
 }
 
 void MSWriter::WriteRow(double time, double timeCentroid, size_t antenna1, size_t antenna2, double u, double v, double w, double interval, const std::complex<float>* data, const bool* flags, const float *weights)
 {
-	_data->_antenna1Col.put(_rowIndex, antenna1);
-	_data->_antenna2Col.put(_rowIndex, antenna2);
+	_flushNeeded = true;
 	if(antenna1==0 && antenna2==0)
 	{
 		_data->_timeCol.put(_rowIndex, time);
@@ -548,22 +586,21 @@ void MSWriter::WriteRow(double time, double timeCentroid, size_t antenna1, size_
 		_data->_sigmaCol.put(_rowIndex, _data->_sigmaArr);
 	}
 	
-	casacore::Vector<double> uvwVec(3);
-	uvwVec[0] = u; uvwVec[1] = v; uvwVec[2] = w;
-	_data->_uvwCol.put(_rowIndex, uvwVec);
-	
+	size_t indexInSlice = _rowIndex - _sliceStart;
+	_data->_ant1Slice[indexInSlice] = antenna1;
+	_data->_ant2Slice[indexInSlice] = antenna2;
+	_data->_uvwSlice.data()[indexInSlice*3+0] = u;
+	_data->_uvwSlice.data()[indexInSlice*3+1] = v;
+	_data->_uvwSlice.data()[indexInSlice*3+2] = w;
+
 	size_t nPol = 4;
 	
 	size_t valCount = _bandInfo.channels.size() * nPol;
-	casacore::IPosition shape(2, nPol, _bandInfo.channels.size());
-	casacore::Array<std::complex<float> > dataArr(shape);
-	casacore::Array<bool> flagArr(shape);
-	casacore::Array<float> weightSpectrumArr(shape);
 	
 	// Fill the casa arrays
-	casacore::Array<std::complex<float> >::contiter dataPtr = dataArr.cbegin();
-	casacore::Array<bool>::contiter flagPtr = flagArr.cbegin();
-	casacore::Array<float>::contiter weightSpectrumPtr = weightSpectrumArr.cbegin();
+	std::complex<float>* dataPtr = _data->_dataSlice.data() + valCount*indexInSlice;
+	bool* flagPtr = _data->_flagSlice.data() + valCount*indexInSlice;
+	float* weightSpectrumPtr = _data->_weightSpectrumSlice.data() + valCount*indexInSlice;
 	for(size_t i=0; i!=valCount; ++i)
 	{
 		*dataPtr = data[i]; ++dataPtr;
@@ -571,17 +608,13 @@ void MSWriter::WriteRow(double time, double timeCentroid, size_t antenna1, size_
 		*weightSpectrumPtr = weights[i]; ++weightSpectrumPtr;
 	}
 	
-	for(size_t p=0; p!=nPol; ++p) _data->_weightsArr[p] = 0.0;
+	float* weightsArr = _data->_weightsSlice.data() + nPol*indexInSlice;
+	for(size_t p=0; p!=nPol; ++p) weightsArr[p] = 0.0;
 	for(size_t ch=0; ch!=_bandInfo.channels.size(); ++ch)
 	{
 		for(size_t p=0; p!=nPol; ++p)
-			_data->_weightsArr[p] += weights[ch*nPol + p];
+			weightsArr[p] += weights[ch*nPol + p];
 	}
-	
-	_data->_dataCol.put(_rowIndex, dataArr);
-	_data->_flagCol.put(_rowIndex, flagArr);
-	_data->_weightCol.put(_rowIndex, _data->_weightsArr);
-	_data->_weightSpectrumCol.put(_rowIndex, weightSpectrumArr);
 	
 	++_rowIndex;
 }
