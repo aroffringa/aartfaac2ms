@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
 		"  -mem <percentage>\n"
 		"\tLimit memory usage to the given fraction of the total system memory. \n"
 		"  -mode <number>\n"
-		"\tSet correlator mode (1-4: LBA, 5-7: HBA).\n"
+		"\tSet RCU mode (1-4: LBA, 5-7: HBA).\n"
 		"  -time-avg <factor>\n"
 		"\tAverage in time (after flagging).\n"
 		"  -freq-avg <factor>\n"
