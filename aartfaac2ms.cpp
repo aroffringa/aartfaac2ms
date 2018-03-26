@@ -30,8 +30,12 @@
 using namespace aoflagger;
 
 Aartfaac2ms::Aartfaac2ms() :
+	_flagger(),
+	_statistics(),
 	_outputFormat(MSOutputFormat),
 	_rfiDetection(false),
+	_collectStatistics(true),
+	_collectHistograms(false),
 	_timeAvgFactor(1), _freqAvgFactor(1),
 	_memPercentage(50),
 	_intervalStart(0), _intervalEnd(0),
@@ -44,6 +48,7 @@ Aartfaac2ms::Aartfaac2ms() :
 	_dyscoDistribution("TruncatedGaussian"),
 	_dyscoNormalization("AF"),
 	_dyscoDistTruncation(2.5),
+	_threadCount(1),
 	_outputData(empty_aligned<std::complex<float>>()),
 	_outputWeights(empty_aligned<float>())
 {
@@ -64,9 +69,9 @@ void Aartfaac2ms::allocateBuffers()
 		memSize = int64_t(memLimit * (1024.0*1024.0*1024.0));
 		memPercentage = 100.0;
 	}
-	size_t nChannelSpace = ((((_file->NChannels()-1)/4)+1)*4);
+	size_t nChannelSpace = ((((_reader->NChannels()-1)/4)+1)*4);
 	size_t maxSamples = memSize*memPercentage/(100*(sizeof(float)*2+1));
-	size_t nAntennas = _file->NAntennas();
+	size_t nAntennas = _reader->NAntennas();
 	size_t maxScansPerPart = maxSamples / (4*nChannelSpace*(nAntennas+1)*nAntennas/2);
 	std::cout << "Timesteps that fit in memory: " << maxScansPerPart << '\n';
 	if(maxScansPerPart<1)
@@ -85,11 +90,11 @@ void Aartfaac2ms::allocateBuffers()
 		std::cout << "Observation does not fit fully in memory, will partition data in " << _nParts << " chunks of " << (nTimesteps/_nParts) << " scans.\n";
 	
 	const size_t requiredWidthCapacity = (nTimesteps+_nParts-1)/_nParts;
-	for(size_t antenna1=0;antenna1!=_file->NAntennas();++antenna1)
+	for(size_t antenna1=0;antenna1!=_reader->NAntennas();++antenna1)
 	{
-		for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
+		for(size_t antenna2=antenna1; antenna2!=_reader->NAntennas(); ++antenna2)
 		{
-			_imageSetBuffers.emplace_back(_flagger.MakeImageSet(requiredWidthCapacity, _file->NChannels(), 8, 0.0f, requiredWidthCapacity));
+			_imageSetBuffers.emplace_back(_flagger.MakeImageSet(requiredWidthCapacity, _reader->NChannels(), 8, 0.0f, requiredWidthCapacity));
 		}
 	}
 }
@@ -124,34 +129,34 @@ void Aartfaac2ms::initializeWriter(const char* outputFilename)
 
 void Aartfaac2ms::setAntennas()
 {
-	std::vector<Writer::AntennaInfo> antennas(_file->NAntennas());
+	std::vector<Writer::AntennaInfo> antennas(_reader->NAntennas());
 	for(size_t ant=0; ant!=antennas.size(); ++ant) {
 		Writer::AntennaInfo &antennaInfo = antennas[ant];
 		antennaInfo.name = std::string("A12_") + std::to_string(ant);
 		antennaInfo.station = "AARTFAAC";
 		antennaInfo.type = "GROUND-BASED";
 		antennaInfo.mount = "ALT-AZ"; // TODO should be "FIXED", but Casa does not like
-		antennaInfo.x = 0; // TODO
-		antennaInfo.y = 0;
-		antennaInfo.z = 0;
+		antennaInfo.x = _antennaPositions[ant].getValue()(0);
+		antennaInfo.y = _antennaPositions[ant].getValue()(1);
+		antennaInfo.z = _antennaPositions[ant].getValue()(2);
 		antennaInfo.diameter = 1; /** TODO can probably give more exact size! */
 		antennaInfo.flag = false;
 	}
-	_writer->WriteAntennae(antennas, _file->StartTime());
+	_writer->WriteAntennae(antennas, _reader->StartTime());
 }
 
 void Aartfaac2ms::setSPWs()
 {
-	std::vector<MSWriter::ChannelInfo> channels(_file->NChannels());
-	_channelFrequenciesHz.resize(_file->NChannels());
+	std::vector<MSWriter::ChannelInfo> channels(_reader->NChannels());
+	_channelFrequenciesHz.resize(_reader->NChannels());
 	std::ostringstream str;
-	double centreFrequencyMHz = 1e-6*(_file->Frequency() + _file->Bandwidth()*0.5);
+	double centreFrequencyMHz = 1e-6*(_reader->Frequency() + _reader->Bandwidth()*0.5);
 	str << "AARTF_BAND_" << (round(centreFrequencyMHz*10.0)/10.0);
-	const double chWidth = _file->Bandwidth() / _file->NChannels();
+	const double chWidth = _reader->Bandwidth() / _reader->NChannels();
 	for(size_t ch=0; ch!=channels.size(); ++ch)
 	{
 		MSWriter::ChannelInfo& channel = channels[ch];
-		_channelFrequenciesHz[ch] = _file->Frequency() + _file->Bandwidth()*ch/_file->Bandwidth();
+		_channelFrequenciesHz[ch] = _reader->Frequency() + _reader->Bandwidth()*ch/_reader->Bandwidth();
 		channel.chanFreq = _channelFrequenciesHz[ch];
 		channel.chanWidth = chWidth;
 		channel.effectiveBW = chWidth;
@@ -160,7 +165,7 @@ void Aartfaac2ms::setSPWs()
 	_writer->WriteBandInfo(str.str(),
 		channels,
 		centreFrequencyMHz*1000000.0,
-		_file->Bandwidth(),
+		_reader->Bandwidth(),
 		false
 	);
 }
@@ -169,8 +174,8 @@ void Aartfaac2ms::setSource()
 {
 	MSWriter::SourceInfo source;
 	source.sourceId = 0;
-	source.time = _file->StartTime();
-	source.interval = _file->StartTime() + _file->IntegrationTime()*_file->NTimesteps();
+	source.time = _reader->StartTime();
+	source.interval = _reader->StartTime() + _reader->IntegrationTime()*_reader->NTimesteps();
 	source.spectralWindowId = 0;
 	source.numLines = 0;
 	source.name = "AARTFAAC";
@@ -190,7 +195,7 @@ void Aartfaac2ms::setField()
 	MSWriter::FieldInfo field;
 	field.name = "AARTFAAC";
 	field.code = std::string();
-	field.time = _file->StartTime();
+	field.time = _reader->StartTime();
 	field.numPoly = 0;
 	double ra = _phaseDirection.getAngle().getValue()[0];
 	double dec = _phaseDirection.getAngle().getValue()[1];
@@ -209,8 +214,8 @@ void Aartfaac2ms::setObservation()
 {
 	Writer::ObservationInfo observation;
 	observation.telescopeName = "AARTFAAC";
-	observation.startTime = _file->StartTime();
-	observation.endTime = _file->StartTime() + _file->IntegrationTime()*_file->NTimesteps();
+	observation.startTime = _reader->StartTime();
+	observation.endTime = _reader->StartTime() + _reader->IntegrationTime()*_reader->NTimesteps();
 	observation.observer = "Unknown";
 	observation.scheduleType = "AARTFAAC";
 	observation.project = "Unknown";
@@ -220,14 +225,47 @@ void Aartfaac2ms::setObservation()
 	_writer->WriteObservation(observation);
 }
 
+void Aartfaac2ms::baselineProcessThreadFunc(ProgressBar* progressBar)
+{
+	QualityStatistics threadStatistics =
+		_flagger.MakeQualityStatistics(_timestepsStart.data(), _timestepsStart.size(), &_channelFrequenciesHz[0], _channelFrequenciesHz.size(), 4, _collectHistograms);
+	
+	size_t baseline;
+	while(_baselinesToProcess.read(baseline))
+	{
+		size_t currentTaskCount = baseline;
+		std::unique_lock<std::mutex> lock(_mutex);
+		progressBar->SetProgress(_imageSetBuffers.size() - currentTaskCount, _imageSetBuffers.size());
+		lock.unlock();
+		
+		processBaseline(baseline, threadStatistics);
+	}
+	
+	// Mutex needs to be locked
+	std::unique_lock<std::mutex> lock(_mutex);
+	if(_statistics == nullptr)
+		_statistics.reset(new QualityStatistics(threadStatistics));
+	else
+		(*_statistics) += threadStatistics;
+}
+
+void Aartfaac2ms::processBaseline(size_t baselineIndex, QualityStatistics& threadStatistics)
+{
+	ImageSet& imageSet = _imageSetBuffers[baselineIndex];
+	FlagMask& flagMask = _flagBuffers[baselineIndex];
+	const std::pair<size_t, size_t>& baseline = _baselines[baselineIndex];
+	
+	_flagger.CollectStatistics(threadStatistics, imageSet, flagMask, _correlatorMask, baseline.first, baseline.second);
+}
+
 void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename, AartfaacMode mode)
 {
-	_file.reset(new AartfaacFile(inputFilename, mode));
-	std::cout << "Correlation mode: " << int(_file->CorrelationMode()) << '\n';
+	_reader.reset(new AartfaacFile(inputFilename, mode));
+	std::cout << "Correlation mode: " << int(_reader->CorrelationMode()) << '\n';
 	
 	readAntennaPositions(antennaConfFilename);
 	
-	ao::uvector<std::complex<float>> vis(_file->VisPerTimestep());
+	ao::uvector<std::complex<float>> vis(_reader->VisPerTimestep());
 	size_t index = 0;
 	
 	allocateBuffers();
@@ -239,20 +277,20 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 		_strategy.reset(new Strategy(_flagger.MakeStrategy(
 			aoflagger::TelescopeId::AARTFAAC_TELESCOPE,
 			aoflagger::StrategyFlags::NONE,
-			_file->Frequency(),
-			_file->IntegrationTime(),
-			_file->Bandwidth() )));
+			_reader->Frequency(),
+			_reader->IntegrationTime(),
+			_reader->Bandwidth() )));
 	}
 	
-	_file->SkipTimesteps(_intervalStart);
+	_reader->SkipTimesteps(_intervalStart);
 	
-	ao::uvector<size_t> baselineMap(_file->NAntennas()*_file->NAntennas());
+	ao::uvector<size_t> baselineMap(_reader->NAntennas()*_reader->NAntennas());
 	size_t bIndex = 0;
-	for(size_t antenna1=0; antenna1!=_file->NAntennas(); ++antenna1)
+	for(size_t antenna1=0; antenna1!=_reader->NAntennas(); ++antenna1)
 	{
-		for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
+		for(size_t antenna2=antenna1; antenna2!=_reader->NAntennas(); ++antenna2)
 		{
-			baselineMap[antenna2 + antenna1*_file->NAntennas()] = bIndex;
+			baselineMap[antenna2 + antenna1*_reader->NAntennas()] = bIndex;
 			++bIndex;
 		}
 	}
@@ -267,24 +305,29 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 		for(ImageSet& imageSet : _imageSetBuffers)
 			imageSet.ResizeWithoutReallocation(chunkEnd-chunkStart);
 		
+		_correlatorMask = _flagger.MakeFlagMask(chunkEnd-chunkStart, _reader->NChannels(), false);
+		
 		_readWatch.Start();
-		_timesteps.clear();
+		_timestepsStart.clear();
+		_timestepsEnd.clear();
 		ProgressBar progress("Reading");
 		for(size_t timeIndex=chunkStart; timeIndex!=chunkEnd; ++timeIndex)
 		{
 			progress.SetProgress(timeIndex-chunkStart, chunkEnd-chunkStart);
 			
-			_timesteps.emplace_back(_file->ReadTimestep(vis.data()));
+			Timestep step = _reader->ReadTimestep(vis.data());
+			_timestepsStart.emplace_back(step.startTime);
+			_timestepsEnd.emplace_back(step.endTime);
 			
 			size_t bufferIndex = timeIndex-chunkStart;
 			std::complex<float>* visPtr = vis.data();
-			for(size_t antenna1=0; antenna1!=_file->NAntennas(); ++antenna1)
+			for(size_t antenna1=0; antenna1!=_reader->NAntennas(); ++antenna1)
 			{
 				for(size_t antenna2=0; antenna2<=antenna1; ++antenna2)
 				{
-					size_t bIndex = baselineMap[antenna1 + antenna2*_file->NAntennas()];
+					size_t bIndex = baselineMap[antenna1 + antenna2*_reader->NAntennas()];
 					ImageSet& imageSet = _imageSetBuffers[bIndex];
-					for(size_t ch=0; ch!=_file->NChannels(); ++ch)
+					for(size_t ch=0; ch!=_reader->NChannels(); ++ch)
 					{
 						for(size_t p=0; p!=4; ++p)
 						{
@@ -302,22 +345,33 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 		_readWatch.Pause();
 		++index;
 		
-		// TODO Flag!
-		
+		progress = ProgressBar("Processing baselines");
 		_flagBuffers.clear();
-		for(size_t antenna1=0;antenna1!=_file->NAntennas();++antenna1)
+		_baselines.clear();
+		for(size_t antenna1=0;antenna1!=_reader->NAntennas();++antenna1)
 		{
-			for(size_t antenna2=antenna1; antenna2!=_file->NAntennas(); ++antenna2)
+			for(size_t antenna2=antenna1; antenna2!=_reader->NAntennas(); ++antenna2)
 			{
-				_flagBuffers.emplace_back(_flagger.MakeFlagMask(chunkEnd-chunkStart, _file->NChannels(), false));
+				_flagBuffers.emplace_back(_correlatorMask);
+				_baselines.emplace_back(antenna1, antenna2);
 			}
 		}
 		
+		_baselinesToProcess.resize(_threadCount);
+		std::vector<std::thread> threadGroup;
+		for(size_t i=0; i!=_threadCount; ++i)
+			threadGroup.emplace_back(std::bind(&Aartfaac2ms::baselineProcessThreadFunc, this, &progress));
+		for(size_t baselineIndex=0; baselineIndex!=_imageSetBuffers.size(); ++baselineIndex)
+			_baselinesToProcess.write(baselineIndex);
+		_baselinesToProcess.write_end();
+		for(std::thread& t : threadGroup)
+			t.join();
+		
 		progress = ProgressBar("Writing");
 		_writeWatch.Start();
-		_outputFlags.resize(_file->NChannels()*4);
-		_outputData = make_aligned<std::complex<float>>(_file->NChannels()*4, 16);
-		_outputWeights = make_aligned<float>(_file->NChannels()*4, 16);
+		_outputFlags.resize(_reader->NChannels()*4);
+		_outputData = make_aligned<std::complex<float>>(_reader->NChannels()*4, 16);
+		_outputWeights = make_aligned<float>(_reader->NChannels()*4, 16);
 		for(size_t timeIndex=chunkStart; timeIndex!=chunkEnd; ++timeIndex)
 		{
 			progress.SetProgress(timeIndex-chunkStart, chunkEnd-chunkStart);
@@ -329,6 +383,14 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 	}
 	
 	std::cout << "Read: " << _readWatch.ToString() << ", processing: " << _processWatch.ToString() << ", writing: " << _writeWatch.ToString() << '\n';
+	
+	_writer.reset();
+	_reader.reset();
+	
+	if(_collectStatistics) {
+		std::cout << "Writing statistics to measurement set...\n";
+		_flagger.WriteStatistics(*_statistics, outputFilename);
+	}
 }
 
 casacore::Muvw calculateUVW(const casacore::MPosition &antennaPos, const casacore::MPosition &refPos,
@@ -346,14 +408,14 @@ casacore::Muvw calculateUVW(const casacore::MPosition &antennaPos, const casacor
 
 void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 {
-	const size_t nAntennas = _file->NAntennas();
-	const size_t nChannels = _file->NChannels();
+	const size_t nAntennas = _reader->NAntennas();
+	const size_t nChannels = _reader->NChannels();
 	const size_t nBaselines = nAntennas*(nAntennas+1)/2;
-	const Timestep& timestep = _timesteps[timeIndex - chunkStart];
-	const double startTime = timestep.startTime;
+	const double startTime = _timestepsStart[timeIndex - chunkStart];
+	const double exposure = _timestepsEnd[timeIndex - chunkStart] - startTime;
 	
-	_uvws.resize(_file->NAntennas());
-	casacore::MEpoch timeEpoch = casacore::MEpoch(casacore::MVEpoch(timestep.startTime/86400.0), casacore::MEpoch::UTC);
+	_uvws.resize(_reader->NAntennas());
+	casacore::MEpoch timeEpoch = casacore::MEpoch(casacore::MVEpoch(startTime/86400.0), casacore::MEpoch::UTC);
 	for(size_t antenna=0; antenna!=nAntennas; ++antenna)
 	{
 		casacore::MVuvw uvw = calculateUVW(_antennaPositions[antenna], _antennaPositions[0], timeEpoch, _phaseDirection).getValue();
@@ -366,7 +428,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 		cosAngles(nChannels),
 		sinAngles(nChannels);
 	
-	initializeWeights(_outputWeights.get(), timestep.endTime-timestep.startTime);
+	initializeWeights(_outputWeights.get(), exposure);
 	size_t baselineIndex = 0;
 	for(size_t antenna1=0; antenna1!=nAntennas; ++antenna1)
 	{
@@ -458,7 +520,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 			}
 	#endif
 				
-			_writer->WriteRow(startTime, startTime, antenna1, antenna2, u, v, w, timestep.endTime-timestep.startTime, _outputData.get(), _outputFlags.data(), _outputWeights.get());
+			_writer->WriteRow(startTime, startTime, antenna1, antenna2, u, v, w, exposure, _outputData.get(), _outputFlags.data(), _outputWeights.get());
 			++baselineIndex;
 		}
 	}
@@ -476,7 +538,7 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 			casacore::MPosition::ITRF);
 	}
 	
-	double centralTime = _file->CentralTime();
+	double centralTime = _reader->CentralTime();
 	casacore::MEpoch time = casacore::MEpoch(casacore::MVEpoch(centralTime/86400.0), casacore::MEpoch::UTC);
 	casacore::MeasFrame frame(_antennaPositions[0], time);
 
@@ -503,8 +565,8 @@ void Aartfaac2ms::initializeWeights(float* outputWeights, double integrationTime
 	// Weights are normalized so that a 'reasonable' res of 200 kHz, 1s has
 	// weight of "1" per sample.
 	// Note that this only holds for numbers in the WEIGHTS_SPECTRUM column; WEIGHTS will hold the sum.
-	double weightFactor = integrationTime * (_file->Bandwidth()/_file->NChannels());
-	for(size_t ch=0; ch!=_file->NChannels(); ++ch)
+	double weightFactor = integrationTime * (_reader->Bandwidth()/_reader->NChannels());
+	for(size_t ch=0; ch!=_reader->NChannels(); ++ch)
 	{
 		for(size_t p=0; p!=4; ++p)
 			outputWeights[ch*4 + p] = weightFactor;

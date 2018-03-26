@@ -11,6 +11,7 @@
 #include "progressbar.h"
 #include "writer.h"
 
+#include "aocommon/lane.h"
 #include "aocommon/uvector.h"
 
 #include <casacore/measures/Measures/MDirection.h>
@@ -19,6 +20,7 @@
 #include <complex>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 struct UVW { double u, v, w; };
@@ -33,6 +35,7 @@ public:
 	void Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename, AartfaacMode mode);
 	
 	void SetMemPercentage(double memPercentage) { _memPercentage = memPercentage; }
+	void SetThreadCount(size_t nThreads) { _threadCount = nThreads; }
 	void SetTimeAveraging(size_t factor) { _timeAvgFactor = factor; }
 	void SetFrequencyAveraging(size_t factor) { _freqAvgFactor = factor; }
 	void SetInterval(size_t start, size_t end) { _intervalStart = start; _intervalEnd = end; }
@@ -57,6 +60,8 @@ private:
 	void initializeWriter(const char* outputFilename);
 	void initializeWeights(float* outputWeights, double integrationTime);
 	void readAntennaPositions(const char* antennaConfFilename);
+	void baselineProcessThreadFunc(ProgressBar* progressBar);
+	void processBaseline(size_t baseline, aoflagger::QualityStatistics& threadStatistics);
 	
 	void setAntennas();
 	void setSPWs();
@@ -66,20 +71,23 @@ private:
 	
 	size_t NTimestepsSelected() const
 	{
-		size_t nTimesteps = _file->NTimesteps();
+		size_t nTimesteps = _reader->NTimesteps();
 		if(_intervalEnd!=0 && nTimesteps>(_intervalEnd-_intervalStart))
 			nTimesteps = _intervalEnd - _intervalStart;
 		return nTimesteps;
 	}
 	
-	std::unique_ptr<class AartfaacFile> _file;
+	std::unique_ptr<class AartfaacFile> _reader;
 	aoflagger::AOFlagger _flagger;
+	std::unique_ptr<aoflagger::QualityStatistics> _statistics;
 	std::unique_ptr<Writer> _writer;
 	std::unique_ptr<aoflagger::Strategy> _strategy;
+	std::mutex _mutex;
+	ao::lane<size_t> _baselinesToProcess;
 	
 	// settings
 	OutputFormat _outputFormat;
-	bool _rfiDetection;
+	bool _rfiDetection, _collectStatistics, _collectHistograms;
 	size_t _timeAvgFactor, _freqAvgFactor;
 	double _memPercentage;
 	size_t _intervalStart, _intervalEnd;
@@ -91,12 +99,15 @@ private:
 	std::string _dyscoDistribution;
 	std::string _dyscoNormalization;
 	double _dyscoDistTruncation;
+	size_t _threadCount;
 	
 	// data fields
 	size_t _nParts;
 	std::vector<aoflagger::ImageSet> _imageSetBuffers;
 	std::vector<aoflagger::FlagMask> _flagBuffers;
-	std::vector<Timestep> _timesteps;
+	aoflagger::FlagMask _correlatorMask;
+	std::vector<double> _timestepsStart, _timestepsEnd;
+	std::vector<std::pair<size_t, size_t>> _baselines;
 	std::vector<UVW> _uvws;
 	std::vector<casacore::MPosition> _antennaPositions;
 	casacore::MDirection _phaseDirection;
