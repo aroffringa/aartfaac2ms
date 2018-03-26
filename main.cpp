@@ -13,6 +13,7 @@ int main(int argc, char* argv[])
 	int argi=1;
 	Aartfaac2ms af2ms;
 	AartfaacMode mode(AartfaacMode::Unused);
+	size_t nCPUs = 0;
 	while(argi<argc && argv[argi][0] == '-')
 	{
 		std::string param(&argv[argi][1]);
@@ -25,6 +26,12 @@ int main(int argc, char* argv[])
 			mode = AartfaacMode::FromNumber(std::atoi(argv[argi]));
 			if(mode == AartfaacMode::Unused)
 				throw std::runtime_error("Invalid mode. Valid modes are 1-7.");
+		}
+		else if(param == "flag") {
+			af2ms.SetRFIDetection(true);
+		}
+		else if(param == "flag") {
+			af2ms.SetRFIDetection(false);
 		}
 		else if(param == "time-avg") {
 			++argi;
@@ -71,6 +78,10 @@ int main(int argc, char* argv[])
 		"\tAverage in frequency (after flagging).\n"
 		"  -interval <start> <end>\n"
 		"\tOnly convert the selected timesteps.\n"
+		"  -flag / -no-flag\n"
+		"\tTurn RFI detection on/off. Default is currently off, but this might change.\n"
+		"  -statistics / -no-statistics\n"
+		"\tTurn collecting of quality on/off. Default is on.\n"
 		"  -centre <ra> <dec>\n"
 		"\tSet alternative phase centre, e.g. -centre 00h00m00.0s 00d00m00.0s.\n"
 		"  -use-dysco\n"
@@ -80,6 +91,10 @@ int main(int argc, char* argv[])
 		"\tOverride default dysco settings\n";
 		return 1;
 	}
+	if(nCPUs == 0)
+		af2ms.SetThreadCount(sysconf(_SC_NPROCESSORS_ONLN));
+	else
+		af2ms.SetThreadCount(nCPUs);
 	if(mode == AartfaacMode::Unused)
 		throw std::runtime_error("Mode not set. Valid modes are 1-7.");
 	af2ms.Run(argv[argi], argv[argi+1], argv[argi+2], mode);

@@ -235,7 +235,7 @@ void Aartfaac2ms::baselineProcessThreadFunc(ProgressBar* progressBar)
 	{
 		size_t currentTaskCount = baseline;
 		std::unique_lock<std::mutex> lock(_mutex);
-		progressBar->SetProgress(_imageSetBuffers.size() - currentTaskCount, _imageSetBuffers.size());
+		progressBar->SetProgress(currentTaskCount, _imageSetBuffers.size());
 		lock.unlock();
 		
 		processBaseline(baseline, threadStatistics);
@@ -255,6 +255,11 @@ void Aartfaac2ms::processBaseline(size_t baselineIndex, QualityStatistics& threa
 	FlagMask& flagMask = _flagBuffers[baselineIndex];
 	const std::pair<size_t, size_t>& baseline = _baselines[baselineIndex];
 	
+	if(_rfiDetection && (baseline.first != baseline.second))
+		flagMask = _flagger.Run(*_strategy, imageSet);
+	else
+		flagMask = _flagger.MakeFlagMask(_timestepsStart.size(), _channelFrequenciesHz.size(), false);
+
 	_flagger.CollectStatistics(threadStatistics, imageSet, flagMask, _correlatorMask, baseline.first, baseline.second);
 }
 
@@ -342,17 +347,19 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 				}
 			}
 		}	
-		_readWatch.Pause();
 		++index;
+		_readWatch.Pause();
 		
 		progress = ProgressBar("Processing baselines");
+		_processWatch.Start();
+		
 		_flagBuffers.clear();
 		_baselines.clear();
 		for(size_t antenna1=0;antenna1!=_reader->NAntennas();++antenna1)
 		{
 			for(size_t antenna2=antenna1; antenna2!=_reader->NAntennas(); ++antenna2)
 			{
-				_flagBuffers.emplace_back(_correlatorMask);
+				_flagBuffers.emplace_back();
 				_baselines.emplace_back(antenna1, antenna2);
 			}
 		}
@@ -367,6 +374,7 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 		for(std::thread& t : threadGroup)
 			t.join();
 		
+		_processWatch.Pause();
 		progress = ProgressBar("Writing");
 		_writeWatch.Start();
 		_outputFlags.resize(_reader->NChannels()*4);
@@ -525,7 +533,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 		}
 	}
 }
-#include <casacore/measures/Measures/MBaseline.h>
+
 void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 {
 	AntennaConfig antConf(antennaConfFilename);

@@ -44,6 +44,7 @@ public:
 		_manualPhaseCentreRA = ra;
 		_manualPhaseCentreDec = dec;
 	}
+	void SetRFIDetection(bool detectRFI) { _rfiDetection = detectRFI; }
 	void SetUseDysco(bool useDysco) { _useDysco = useDysco; }
 	void SetAdvancedDyscoOptions(size_t dataBitRate, size_t weightBitRate, const std::string& distribution, double distTruncation, const std::string& normalization)
 	{
