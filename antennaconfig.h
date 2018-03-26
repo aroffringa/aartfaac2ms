@@ -44,7 +44,18 @@ public:
 	
 	std::vector<Position> GetLBAPositions() const
 	{
-		const std::vector<double>& arr = GetArray("LBA");
+		return getPositions("LBA");
+	}
+	
+	std::vector<Position> GetHBAPositions() const
+	{
+		return getPositions("HBA");
+	}
+	
+private:
+	std::vector<Position> getPositions(const std::string& arrayName) const
+	{
+		const std::vector<double>& arr = GetArray(arrayName);
 		std::vector<Position> pos;
 		for(size_t index=0; index<arr.size(); index+=6)
 		{
@@ -52,8 +63,6 @@ public:
 		}
 		return pos;
 	}
-	
-private:
 	
 	bool next()
 	{

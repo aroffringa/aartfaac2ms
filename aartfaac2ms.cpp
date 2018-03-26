@@ -32,6 +32,7 @@ using namespace aoflagger;
 Aartfaac2ms::Aartfaac2ms() :
 	_flagger(),
 	_statistics(),
+	_mode(AartfaacMode::Unused),
 	_outputFormat(MSOutputFormat),
 	_rfiDetection(false),
 	_collectStatistics(true),
@@ -265,6 +266,7 @@ void Aartfaac2ms::processBaseline(size_t baselineIndex, QualityStatistics& threa
 
 void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename, AartfaacMode mode)
 {
+	_mode = mode;
 	_reader.reset(new AartfaacFile(inputFilename, mode));
 	std::cout << "Correlation mode: " << int(_reader->CorrelationMode()) << '\n';
 	
@@ -537,7 +539,25 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 {
 	AntennaConfig antConf(antennaConfFilename);
-	std::vector<Position> positions = antConf.GetLBAPositions();
+	std::vector<Position> positions;
+	switch(_mode.mode)
+	{
+		case AartfaacMode::LBAInner10_90:
+		case AartfaacMode::LBAInner30_90:
+		case AartfaacMode::LBAOuter10_90:
+		case AartfaacMode::LBAOuter30_90:
+			std::cout << "Using LBA antenna positions.\n";
+			positions = antConf.GetLBAPositions();
+			break;
+		case AartfaacMode::HBA110_190:
+		case AartfaacMode::HBA170_230:
+		case AartfaacMode::HBA210_270:
+			std::cout << "Using HBA antenna positions.\n";
+			positions = antConf.GetHBAPositions();
+			break;
+		default:
+			throw std::runtime_error("Wrong RCU mode");
+	}
 	for(const Position& p : positions)
 	{
 		casacore::MPosition();
@@ -558,10 +578,9 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 	double dec = _phaseDirection.getAngle().getValue()[1];
 	std::cout << "Central time: " << time << ", zenith direction: " << RaDecCoord::RaDecToString(ra, dec) << '\n';
 	if(_manualPhaseCentre) {
-		_phaseDirection.getAngle().getValue()[0] = _manualPhaseCentreRA;
-		_phaseDirection.getAngle().getValue()[1] = _manualPhaseCentreDec;
+		_phaseDirection.set(casa::MVDirection(_manualPhaseCentreRA, _manualPhaseCentreDec), j2000Ref);
 		std::cout << "Using manual phase centre: "
-			<< RaDecCoord::RaDecToString(ra, dec) << '\n';
+			<< RaDecCoord::RaDecToString(_manualPhaseCentreRA, _manualPhaseCentreDec) << '\n';
 	}
 	else {
 		std::cout << "Zenith direction at central time is used as phase direction.\n";

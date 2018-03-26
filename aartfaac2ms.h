@@ -87,6 +87,7 @@ private:
 	ao::lane<size_t> _baselinesToProcess;
 	
 	// settings
+	AartfaacMode _mode;
 	OutputFormat _outputFormat;
 	bool _rfiDetection, _collectStatistics, _collectHistograms;
 	size_t _timeAvgFactor, _freqAvgFactor;
