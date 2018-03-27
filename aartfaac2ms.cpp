@@ -1,9 +1,11 @@
 #include "aartfaac2ms.h"
 
+#include "aartfaacms.h"
 #include "averagingwriter.h"
 #include "fitswriter.h"
 #include "mswriter.h"
 #include "threadedwriter.h"
+#include "version.h"
 
 #include "units/radeccoord.h"
 
@@ -395,11 +397,16 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 	std::cout << "Read: " << _readWatch.ToString() << ", processing: " << _processWatch.ToString() << ", writing: " << _writeWatch.ToString() << '\n';
 	
 	_writer.reset();
-	_reader.reset();
 	
 	if(_collectStatistics) {
 		std::cout << "Writing statistics to measurement set...\n";
 		_flagger.WriteStatistics(*_statistics, outputFilename);
+	}
+	
+	if(_outputFormat == MSOutputFormat)
+	{
+		std::cout << "Writing AARTFAAC fields to measurement set...\n";
+		writeAartfaacFieldsToMS(outputFilename, NTimestepsSelected() /_nParts);
 	}
 }
 
@@ -548,12 +555,14 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 		case AartfaacMode::LBAOuter30_90:
 			std::cout << "Using LBA antenna positions.\n";
 			positions = antConf.GetLBAPositions();
+			_antennaAxes = antConf.GetLBAAxes();
 			break;
 		case AartfaacMode::HBA110_190:
 		case AartfaacMode::HBA170_230:
 		case AartfaacMode::HBA210_270:
 			std::cout << "Using HBA antenna positions.\n";
 			positions = antConf.GetHBAPositions();
+			_antennaAxes = antConf.GetHBA0Axes();
 			break;
 		default:
 			throw std::runtime_error("Wrong RCU mode");
@@ -598,4 +607,12 @@ void Aartfaac2ms::initializeWeights(float* outputWeights, double integrationTime
 		for(size_t p=0; p!=4; ++p)
 			outputWeights[ch*4 + p] = weightFactor;
 	}
+}
+
+void Aartfaac2ms::writeAartfaacFieldsToMS(const std::string& outputFilename, size_t flagWindowSize)
+{
+	AartfaacMS afMs(outputFilename);
+	afMs.InitializeFields();
+	afMs.UpdateObservationInfo(flagWindowSize);
+	afMs.WriteKeywords(AF2MS_VERSION_STR, AF2MS_VERSION_DATE, _antennaAxes);
 }

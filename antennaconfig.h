@@ -52,6 +52,21 @@ public:
 		return getPositions("HBA");
 	}
 	
+	std::array<double, 9> GetLBAAxes() const
+	{
+		return getAxes("LBA_ROTATION_MATRIX");
+	}
+	
+	std::array<double, 9> GetHBA0Axes() const
+	{
+		return getAxes("HBA0_ROTATION_MATRIX");
+	}
+	
+	std::array<double, 9> GetHBA1Axes() const
+	{
+		return getAxes("HBA1_ROTATION_MATRIX");
+	}
+	
 private:
 	std::vector<Position> getPositions(const std::string& arrayName) const
 	{
@@ -62,6 +77,18 @@ private:
 			pos.emplace_back(Position{arr[index], arr[index+1], arr[index+2]});
 		}
 		return pos;
+	}
+	
+	std::array<double, 9> getAxes(const std::string& arrayName) const
+	{
+		const std::vector<double>& arr = GetArray(arrayName);
+		if(arr.size() != 9)
+			throw std::runtime_error("The array for coordinate axes in the antenna config file had an incorrect size");
+		
+		std::array<double, 9> axes;
+		for(size_t index=0; index<9; ++index)
+			axes[index] = arr[index];
+		return axes;
 	}
 	
 	bool next()

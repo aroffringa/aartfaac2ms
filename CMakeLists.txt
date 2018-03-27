@@ -45,7 +45,7 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 configure_file(version.h.in version.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(aartfaac2ms main.cpp aartfaac2ms.cpp averagingwriter.cpp fitsuser.cpp fitswriter.cpp mswriter.cpp progressbar.cpp stopwatch.cpp threadedwriter.cpp)
+add_executable(aartfaac2ms main.cpp aartfaac2ms.cpp aartfaacms.cpp averagingwriter.cpp fitsuser.cpp fitswriter.cpp mswriter.cpp progressbar.cpp stopwatch.cpp threadedwriter.cpp)
 target_link_libraries(aartfaac2ms ${AOFLAGGER_LIB} ${CFITSIO_LIBRARY} ${CASACORE_LIBRARIES})
 
 message(STATUS "Flags passed to C++ compiler: " ${CMAKE_CXX_FLAGS})

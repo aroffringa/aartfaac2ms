@@ -63,6 +63,7 @@ private:
 	void readAntennaPositions(const char* antennaConfFilename);
 	void baselineProcessThreadFunc(ProgressBar* progressBar);
 	void processBaseline(size_t baseline, aoflagger::QualityStatistics& threadStatistics);
+	void writeAartfaacFieldsToMS(const std::string& outputFilename, size_t flagWindowSize);
 	
 	void setAntennas();
 	void setSPWs();
@@ -112,6 +113,7 @@ private:
 	std::vector<std::pair<size_t, size_t>> _baselines;
 	std::vector<UVW> _uvws;
 	std::vector<casacore::MPosition> _antennaPositions;
+	std::array<double, 9> _antennaAxes;
 	casacore::MDirection _phaseDirection;
 	ao::uvector<double> _channelFrequenciesHz;
 	
