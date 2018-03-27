@@ -30,6 +30,9 @@ public:
 		_file.read(reinterpret_cast<char*>(&_header), sizeof(AartfaacHeader));
 		_blockSize = sizeof(std::complex<float>) * VisPerTimestep();
 		
+		if(_header.correlationMode != 15)
+			throw std::runtime_error("Correlation mode of header was not 15. This tool can only handle sets with 4 polarizations.");
+		
 		// Read middle timestep to get central time of obs
 		SeekToTimestep(NTimesteps()/2);
 		AartfaacHeader midHeader;

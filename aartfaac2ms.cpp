@@ -270,7 +270,6 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 {
 	_mode = mode;
 	_reader.reset(new AartfaacFile(inputFilename, mode));
-	std::cout << "Correlation mode: " << int(_reader->CorrelationMode()) << '\n';
 	
 	readAntennaPositions(antennaConfFilename);
 	
