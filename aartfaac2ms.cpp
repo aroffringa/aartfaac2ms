@@ -613,6 +613,24 @@ void Aartfaac2ms::writeAartfaacFieldsToMS(const std::string& outputFilename, siz
 {
 	AartfaacMS afMs(outputFilename);
 	afMs.InitializeFields();
-	afMs.UpdateObservationInfo(flagWindowSize);
+	const char* modeStr;
+	switch(_mode.mode)
+	{
+		case AartfaacMode::LBAInner10_90:
+		case AartfaacMode::LBAInner30_90:
+		case AartfaacMode::LBAOuter10_90:
+		case AartfaacMode::LBAOuter30_90:
+			modeStr = "LBA";
+			break;
+		case AartfaacMode::HBA110_190:
+		case AartfaacMode::HBA170_230:
+		case AartfaacMode::HBA210_270:
+			modeStr = "HBA";
+			break;
+		default:
+			modeStr = "?";
+			break;
+	}
+	afMs.UpdateObservationInfo(modeStr, _mode.mode, flagWindowSize);
 	afMs.WriteKeywords(AF2MS_VERSION_STR, AF2MS_VERSION_DATE, _antennaAxes);
 }

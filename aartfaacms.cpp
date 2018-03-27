@@ -35,6 +35,8 @@ const std::string AartfaacMS::_keywordNames[] = {
 
 const std::string AartfaacMS::_columnNames[] = {
 	/* Observation */
+	"AARTFAAC_ANTENNA_TYPE",
+	"AARTFAAC_RCU_MODE",
 	"AARTFAAC_FLAG_WINDOW_SIZE"
 };
 
@@ -66,14 +68,20 @@ void AartfaacMS::addObservationFields()
 	try {
 		MSObservation obsTable = _data->_measurementSet.observation();
 		
+		ScalarColumnDesc<casacore::String> antennaTypeCD =
+			ScalarColumnDesc<casacore::String>(columnName(AartfaacMSEnums::AARTFAAC_ANTENNA_TYPE));
+		ScalarColumnDesc<int> rcuModeCD =
+			ScalarColumnDesc<int>(columnName(AartfaacMSEnums::AARTFAAC_RCU_MODE));
 		ScalarColumnDesc<int> flagWindowSizeCD =
 			ScalarColumnDesc<int>(columnName(AartfaacMSEnums::AARTFAAC_FLAG_WINDOW_SIZE));
 		
 		obsTable.addColumn(flagWindowSizeCD);
+		obsTable.addColumn(antennaTypeCD);
+		obsTable.addColumn(rcuModeCD);
 	} catch(std::exception& e) { }
 }
 
-void AartfaacMS::UpdateObservationInfo(size_t flagWindowSize)
+void AartfaacMS::UpdateObservationInfo(std::string antennaType, int rcuMode, size_t flagWindowSize)
 {
 	MSObservation obsTable = _data->_measurementSet.observation();
 	
@@ -83,9 +91,15 @@ void AartfaacMS::UpdateObservationInfo(size_t flagWindowSize)
 		throw std::runtime_error(s.str());
 	}
 	
+	ScalarColumn<casacore::String> antennaTypeCol =
+		ScalarColumn<casacore::String>(obsTable, columnName(AartfaacMSEnums::AARTFAAC_ANTENNA_TYPE));
+	ScalarColumn<int> rcuModeCol =
+		ScalarColumn<int>(obsTable, columnName(AartfaacMSEnums::AARTFAAC_RCU_MODE));
 	ScalarColumn<int> flagWindowSizeCol =
 		ScalarColumn<int>(obsTable, columnName(AartfaacMSEnums::AARTFAAC_FLAG_WINDOW_SIZE));
 		
+	antennaTypeCol.put(0, antennaType);
+	rcuModeCol.put(0, rcuMode);
 	flagWindowSizeCol.put(0, flagWindowSize);
 }
 

@@ -16,6 +16,8 @@ struct AartfaacMSEnums
 	enum Columns
 	{
 		/* Observation */
+		AARTFAAC_ANTENNA_TYPE,
+		AARTFAAC_RCU_MODE,
 		AARTFAAC_FLAG_WINDOW_SIZE
 	};
 };
@@ -32,7 +34,7 @@ class AartfaacMS
 			addObservationFields();
 		}
 		
-		void UpdateObservationInfo(size_t flagWindowSize);
+		void UpdateObservationInfo(std::string antennaType, int rcuMode, size_t flagWindowSize);
 		
 		void WriteKeywords(const std::string& af2msVersion, const std::string& af2msVersionDate, const std::array<double, 9>& coordinateAxes);
 		
