@@ -41,7 +41,7 @@ public:
 		if(sbIndex == std::string::npos || sbIndex+5 > fn.size())
 			throw std::runtime_error("Filename should have subband index preceded by 'SB' in it");
 		_sbIndex = std::stoi(fn.substr(sbIndex+2, 3));
-		std::cout << "Calculating frequency for " << fn.substr(sbIndex+2, 3) << '\n';
+		std::cout << "Calculating frequency for " << fn.substr(sbIndex, 5) << '\n';
 		
 		double frequencyOffset = 0.0;
 		switch(mode.mode) {
