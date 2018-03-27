@@ -37,7 +37,7 @@ public:
 		_centralCasaTime = TimeToCasa(midHeader.startTime);
 		
 		std::string fn(filename);
-		size_t sbIndex = fn.find_last_of("SB");
+		size_t sbIndex = fn.rfind("SB");
 		if(sbIndex == std::string::npos || sbIndex+5 > fn.size())
 			throw std::runtime_error("Filename should have subband index preceded by 'SB' in it");
 		_sbIndex = std::stoi(fn.substr(sbIndex+2, 3));
