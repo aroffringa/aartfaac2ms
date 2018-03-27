@@ -73,3 +73,20 @@ void AartfaacMS::addObservationFields()
 	} catch(std::exception& e) { }
 }
 
+void AartfaacMS::UpdateObservationInfo(size_t flagWindowSize)
+{
+	MSObservation obsTable = _data->_measurementSet.observation();
+	
+	if(obsTable.nrow() != 1) {
+		std::stringstream s;
+		s << "The observation table of a MWA MS should have exactly one row, but in " << _filename << " it has " << obsTable.nrow() << " rows.";
+		throw std::runtime_error(s.str());
+	}
+	
+	ScalarColumn<int> flagWindowSizeCol =
+		ScalarColumn<int>(obsTable, columnName(AartfaacMSEnums::AARTFAAC_FLAG_WINDOW_SIZE));
+		
+	flagWindowSizeCol.put(0, flagWindowSize);
+}
+
+
