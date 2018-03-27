@@ -28,7 +28,7 @@ struct AartfaacMSData
 
 const std::string AartfaacMS::_keywordNames[] = {
 	/* Antenna */
-	"AARTFAAC_COORDINATE_AXES"
+	"AARTFAAC_COORDINATE_AXES",
 	/* Main table */
 	"AARTFAAC_AF2MS_VERSION", "AARTFAAC_AF2MS_VERSION_DATE"
 };
@@ -79,7 +79,7 @@ void AartfaacMS::UpdateObservationInfo(size_t flagWindowSize)
 	
 	if(obsTable.nrow() != 1) {
 		std::stringstream s;
-		s << "The observation table of a MWA MS should have exactly one row, but in " << _filename << " it has " << obsTable.nrow() << " rows.";
+		s << "The observation table of a AARTFAAC MS should have exactly one row, but in " << _filename << " it has " << obsTable.nrow() << " rows.";
 		throw std::runtime_error(s.str());
 	}
 	
