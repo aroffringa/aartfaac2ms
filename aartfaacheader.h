@@ -7,7 +7,7 @@
 
 struct AartfaacHeader {
 	static const uint32_t
-		CORR_HDR_MAGIC= 0x000000003B98F002; // Magic number in raw corr visibilities.
+		CORR_HDR_MAGIC= 0x3B98F002; // Magic number in raw corr visibilities.
 	
 	uint32_t magic;
 	uint16_t nrReceivers;
