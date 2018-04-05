@@ -153,13 +153,13 @@ void Aartfaac2ms::setSPWs()
 	std::vector<MSWriter::ChannelInfo> channels(_reader->NChannels());
 	_channelFrequenciesHz.resize(_reader->NChannels());
 	std::ostringstream str;
-	double centreFrequencyMHz = 1e-6*(_reader->Frequency() + _reader->Bandwidth()*0.5);
-	str << "AARTF_BAND_" << (round(centreFrequencyMHz*10.0)/10.0);
+	str << "AARTF_BAND_" << (round(1e-6*_reader->Frequency()*10.0)/10.0);
 	const double chWidth = _reader->Bandwidth() / _reader->NChannels();
+	double startFrequency = _reader->Frequency() - _reader->Bandwidth()*0.5;
 	for(size_t ch=0; ch!=channels.size(); ++ch)
 	{
 		MSWriter::ChannelInfo& channel = channels[ch];
-		_channelFrequenciesHz[ch] = _reader->Frequency() + _reader->Bandwidth()*ch/_reader->Bandwidth();
+		_channelFrequenciesHz[ch] = startFrequency + chWidth*(0.5+double(ch));
 		channel.chanFreq = _channelFrequenciesHz[ch];
 		channel.chanWidth = chWidth;
 		channel.effectiveBW = chWidth;
@@ -167,7 +167,7 @@ void Aartfaac2ms::setSPWs()
 	}
 	_writer->WriteBandInfo(str.str(),
 		channels,
-		centreFrequencyMHz*1000000.0,
+		_reader->Frequency(),
 		_reader->Bandwidth(),
 		false
 	);

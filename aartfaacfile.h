@@ -76,7 +76,7 @@ public:
 				_bandwidth = 156250.0;
 				frequencyOffset = 160e6;
 				break;
-			case AartfaacMode::HBA210_270: // 200 MHz clock, Nyquist zone 2
+			case AartfaacMode::HBA210_270: // 200 MHz clock, Nyquist zone 3
 				_bandwidth = 195312.5;
 				frequencyOffset = 200e6;
 				break;
