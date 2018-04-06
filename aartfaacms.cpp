@@ -59,7 +59,7 @@ void AartfaacMS::WriteKeywords(const std::string& af2msVersion, const std::strin
 	double* ptr = coordinateAxesVec.data();
 	for(size_t i=0; i!=9; ++i)
 		ptr[i] = coordinateAxes[i];
-	_data->_measurementSet.rwKeywordSet().define(
+	_data->_measurementSet.antenna().rwKeywordSet().define(
 		keywordName(AartfaacMSEnums::AARTFAAC_COORDINATE_AXES), coordinateAxesVec);
 }
 
