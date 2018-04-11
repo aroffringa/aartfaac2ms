@@ -57,8 +57,14 @@ void AartfaacMS::WriteKeywords(const std::string& af2msVersion, const std::strin
 	
 	casacore::Matrix<double> coordinateAxesVec(3, 3);
 	double* ptr = coordinateAxesVec.data();
-	for(size_t i=0; i!=9; ++i)
-		ptr[i] = coordinateAxes[i];
+	for(size_t y=0; y!=3; ++y)
+	{
+		for(size_t x=0; x!=3; ++x)
+		{
+			// Perform transpose
+			ptr[y+x*3] = coordinateAxes[x+y*3];
+		}
+	}
 	_data->_measurementSet.antenna().rwKeywordSet().define(
 		keywordName(AartfaacMSEnums::AARTFAAC_COORDINATE_AXES), coordinateAxesVec);
 }
