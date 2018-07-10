@@ -44,10 +44,10 @@ public:
 		}
 		
 		// Read middle timestep to get central time of obs
-		SeekToTimestep(NTimesteps()/2);
+		/*SeekToTimestep(NTimesteps()/2);
 		AartfaacHeader midHeader;
 		_file.read(reinterpret_cast<char*>(&midHeader), sizeof(AartfaacHeader));
-		_centralCasaTime = TimeToCasa(midHeader.startTime);
+		_centralCasaTime = TimeToCasa(midHeader.startTime);*/
 		
 		std::string fn(filename);
 		size_t sbIndex = fn.rfind("SB");
@@ -118,6 +118,17 @@ public:
 		return Timestep{TimeToCasa(h.startTime), TimeToCasa(h.endTime) };
 	}
 	
+	Timestep ReadMetadata()
+	{
+		AartfaacHeader h;
+		_file.read(reinterpret_cast<char*>(&h), sizeof(AartfaacHeader));
+		if(!_file)
+			throw std::runtime_error("Error reading file");
+		SeekToTimestep(_blockPos);
+		
+		return Timestep{TimeToCasa(h.startTime), TimeToCasa(h.endTime) };
+	}
+	
 	bool HasMore() const
 	{
 		return _blockPos < (_filesize / _blockSize);
@@ -134,7 +145,6 @@ public:
 	
 	double Bandwidth() const { return _bandwidth; }
 	double StartTime() const { return TimeToCasa(_header.startTime); }
-	double CentralTime() const { return _centralCasaTime; }
 	double Frequency() const { return _frequency; }
 	double IntegrationTime() const { return _header.endTime-_header.startTime; }
 	
@@ -151,7 +161,6 @@ private:
 	AartfaacMode _mode;
 	size_t _blockSize, _filesize, _blockPos, _sbIndex;
 	double _frequency, _bandwidth;
-	double _centralCasaTime;
 };
 
 #endif

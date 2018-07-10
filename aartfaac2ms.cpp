@@ -290,7 +290,7 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 			_reader->Bandwidth() )));
 	}
 	
-	_reader->SkipTimesteps(_intervalStart);
+	_reader->SeekToTimestep(_intervalStart);
 	
 	ao::uvector<size_t> baselineMap(_reader->NAntennas()*_reader->NAntennas());
 	size_t bIndex = 0;
@@ -574,7 +574,8 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 			casacore::MPosition::ITRF);
 	}
 	
-	double centralTime = _reader->CentralTime();
+	_reader->SeekToTimestep((_intervalStart + _intervalEnd) / 2);
+	double centralTime = _reader->ReadMetadata().startTime;
 	casacore::MEpoch time = casacore::MEpoch(casacore::MVEpoch(centralTime/86400.0), casacore::MEpoch::UTC);
 	casacore::MeasFrame frame(_antennaPositions[0], time);
 
@@ -586,7 +587,7 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 	double dec = _phaseDirection.getAngle().getValue()[1];
 	std::cout << "Central time: " << time << ", zenith direction: " << RaDecCoord::RaDecToString(ra, dec) << '\n';
 	if(_manualPhaseCentre) {
-		_phaseDirection.set(casa::MVDirection(_manualPhaseCentreRA, _manualPhaseCentreDec), j2000Ref);
+		_phaseDirection.set(casacore::MVDirection(_manualPhaseCentreRA, _manualPhaseCentreDec), j2000Ref);
 		std::cout << "Using manual phase centre: "
 			<< RaDecCoord::RaDecToString(_manualPhaseCentreRA, _manualPhaseCentreDec) << '\n';
 	}
