@@ -574,7 +574,10 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 			casacore::MPosition::ITRF);
 	}
 	
-	_reader->SeekToTimestep((_intervalStart + _intervalEnd) / 2);
+	size_t lastTimestep = _intervalEnd;
+	if(lastTimestep == 0)
+		lastTimestep = _reader->NTimesteps();
+	_reader->SeekToTimestep((_intervalStart + lastTimestep) / 2);
 	double centralTime = _reader->ReadMetadata().startTime;
 	casacore::MEpoch time = casacore::MEpoch(casacore::MVEpoch(centralTime/86400.0), casacore::MEpoch::UTC);
 	casacore::MeasFrame frame(_antennaPositions[0], time);
