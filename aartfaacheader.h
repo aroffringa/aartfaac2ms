@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <sstream>
+#include <stdexcept>
 
 struct AartfaacHeader {
 	static const uint32_t
@@ -19,6 +20,26 @@ struct AartfaacHeader {
 	uint16_t nrChannels;
 
 	char     pad1[170];
+	
+	size_t VisPerTimestep() const
+	{
+		size_t nBaselines = nrReceivers * (nrReceivers+1) / 2;
+		return nBaselines * nrChannels * nrPolarizations;
+	}
+	
+	void Check() const
+	{
+		if(magic != CORR_HDR_MAGIC)
+		{
+			throw std::runtime_error("This file does not start with the standard header prefix. It is not a supported Aartfaac correlation file or is damaged.");
+		}
+		if(correlationMode != 15)
+		{
+			std::ostringstream str;
+			str << "This Aartfaac file specifes a correlation mode of '" << int(correlationMode) << "'. This tool can only handle sets with 4 polarizations (mode 15).";
+			throw std::runtime_error(str.str());
+		}
+	}
 	
 	std::string ToString() {
 		std::ostringstream str;

@@ -29,69 +29,42 @@ public:
 		_file.seekg(0, std::ios::beg);
 		_file.read(reinterpret_cast<char*>(&_header), sizeof(AartfaacHeader));
 		
-		if(_header.magic != AartfaacHeader::CORR_HDR_MAGIC)
-		{
-			throw std::runtime_error("This file does not start with the standard header prefix. It is not a supported Aartfaac correlation file or is damaged.");
-		}
+		_header.Check();
 		
-		_blockSize = sizeof(std::complex<float>) * VisPerTimestep();
-		
-		if(_header.correlationMode != 15)
-		{
-			std::ostringstream str;
-			str << "This Aartfaac file specifes a correlation mode of '" << int(_header.correlationMode) << "'. This tool can only handle sets with 4 polarizations (mode 15).";
-			throw std::runtime_error(str.str());
-		}
-		
-		// Read middle timestep to get central time of obs
-		/*SeekToTimestep(NTimesteps()/2);
-		AartfaacHeader midHeader;
-		_file.read(reinterpret_cast<char*>(&midHeader), sizeof(AartfaacHeader));
-		_centralCasaTime = TimeToCasa(midHeader.startTime);*/
+		_blockSize = sizeof(std::complex<float>) * _header.VisPerTimestep();
 		
 		std::string fn(filename);
 		size_t sbIndex = fn.rfind("SB");
 		if(sbIndex == std::string::npos || sbIndex+5 > fn.size())
-			throw std::runtime_error("Filename should have subband index preceded by 'SB' in it");
+			throw std::runtime_error("Filename should contain subband index preceded by 'SB' in it");
 		_sbIndex = std::stoi(fn.substr(sbIndex+2, 3));
 		std::cout << "Calculating frequency for " << fn.substr(sbIndex, 5) << ".\n";
 		
 		// This is from:
 		// http://astron.nl/radio-observatory/astronomers/users/
 		//   technical-information/frequency-selection/station-clocks-and-rcu
-		double frequencyOffset = 0.0;
-		switch(mode.mode) {
-			case AartfaacMode::LBAInner10_90: // 200 MHz clock, Nyquist zone 1
-			case AartfaacMode::LBAInner30_90:
-			case AartfaacMode::LBAOuter10_90:
-			case AartfaacMode::LBAOuter30_90:
-				_bandwidth = 195312.5; // 1/1024 x nu_{clock}
-				frequencyOffset = 0.0;
-				break;
-			case AartfaacMode::HBA110_190: // 200 MHz clock, Nyquist zone 2
-				_bandwidth = 195312.5;
-				frequencyOffset = 100e6;
-				break;
-			case AartfaacMode::HBA170_230: // 160 MHz clock, Nyquist zone 3
-				_bandwidth = 156250.0;
-				frequencyOffset = 160e6;
-				break;
-			case AartfaacMode::HBA210_270: // 200 MHz clock, Nyquist zone 3
-				_bandwidth = 195312.5;
-				frequencyOffset = 200e6;
-				break;
-			default:
-				throw std::runtime_error("Don't know how to handle this mode: not implemented yet");
-		}
+		_bandwidth = mode.Bandwidth();
+		const double frequencyOffset = mode.FrequencyOffset();
 		_frequency = _bandwidth *  _sbIndex + frequencyOffset;
 		
 		SeekToTimestep(0);
 	}
 	
-	size_t VisPerTimestep() const
+	AartfaacFile(const char* filename) :
+		_file(filename), _mode(AartfaacMode::Unused), _blockPos(0)
 	{
-		size_t nBaselines = _header.nrReceivers * (_header.nrReceivers+1) / 2;
-		return nBaselines * _header.nrChannels * _header.nrPolarizations;
+		_file.seekg(0, std::ios::end);
+		_filesize = _file.tellg();
+		
+		// Read first header
+		_file.seekg(0, std::ios::beg);
+		_file.read(reinterpret_cast<char*>(&_header), sizeof(AartfaacHeader));
+		
+		_header.Check();
+		
+		_blockSize = sizeof(std::complex<float>) * _header.VisPerTimestep();
+		
+		SeekToTimestep(0);
 	}
 	
 	void SkipTimesteps(int count)
@@ -137,6 +110,11 @@ public:
 	size_t NTimesteps() const
 	{
 		return _filesize / _blockSize;
+	}
+	
+	size_t VisPerTimestep() const
+	{
+		return _header.VisPerTimestep();
 	}
 	
 	size_t NChannels() const { return _header.nrChannels; }

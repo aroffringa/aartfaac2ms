@@ -18,7 +18,7 @@ public:
 	} mode;
 	AartfaacMode(Mode m) : mode(m) { }
 	
-	std::string ToString() {
+	std::string ToString() const {
 		switch(mode) {
 			default:
 			case Unused: return "unused";
@@ -39,6 +39,42 @@ public:
 	static AartfaacMode FromNumber(int modeNumber)
 	{
 		return AartfaacMode(static_cast<Mode>(modeNumber));
+	}
+	
+	double Bandwidth() const
+	{
+		switch(mode) {
+			case AartfaacMode::LBAInner10_90: // 200 MHz clock, Nyquist zone 1
+			case AartfaacMode::LBAInner30_90:
+			case AartfaacMode::LBAOuter10_90:
+			case AartfaacMode::LBAOuter30_90:
+			case AartfaacMode::HBA110_190: // 200 MHz clock, Nyquist zone 2
+			case AartfaacMode::HBA210_270: // 200 MHz clock, Nyquist zone 3
+				return 195312.5; // 1/1024 x nu_{clock}
+			case AartfaacMode::HBA170_230: // 160 MHz clock, Nyquist zone 3
+				return 156250.0;
+			default:
+				throw std::runtime_error("Don't know how to handle this mode: not implemented yet");
+		}
+	}
+	
+	double FrequencyOffset() const
+	{
+		switch(mode) {
+			case AartfaacMode::LBAInner10_90: // 200 MHz clock, Nyquist zone 1
+			case AartfaacMode::LBAInner30_90:
+			case AartfaacMode::LBAOuter10_90:
+			case AartfaacMode::LBAOuter30_90:
+				return 0.0;
+			case AartfaacMode::HBA110_190: // 200 MHz clock, Nyquist zone 2
+				return 100e6;
+			case AartfaacMode::HBA170_230: // 160 MHz clock, Nyquist zone 3
+				return 160e6;
+			case AartfaacMode::HBA210_270: // 200 MHz clock, Nyquist zone 3
+				return 200e6;
+			default:
+				throw std::runtime_error("Don't know how to handle this mode: not implemented yet");
+		}
 	}
 };
 

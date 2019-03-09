@@ -48,4 +48,9 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(aartfaac2ms main.cpp aartfaac2ms.cpp aartfaacms.cpp averagingwriter.cpp fitsuser.cpp fitswriter.cpp mswriter.cpp progressbar.cpp stopwatch.cpp threadedwriter.cpp)
 target_link_libraries(aartfaac2ms ${AOFLAGGER_LIB} ${CFITSIO_LIBRARY} ${CASACORE_LIBRARIES})
 
+add_executable(afedit afedit.cpp)
+target_link_libraries(afedit ${CASACORE_LIBRARIES})
+
+install(TARGETS aartfaac2ms afedit DESTINATION bin)
+
 message(STATUS "Flags passed to C++ compiler: " ${CMAKE_CXX_FLAGS})

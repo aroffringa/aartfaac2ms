@@ -568,7 +568,6 @@ void Aartfaac2ms::readAntennaPositions(const char* antennaConfFilename)
 	}
 	for(const Position& p : positions)
 	{
-		casacore::MPosition();
 		_antennaPositions.emplace_back(
 			casacore::MVPosition(p.x, p.y, p.z),
 			casacore::MPosition::ITRF);
