@@ -52,10 +52,10 @@ int main(int argc, char* argv[])
 		}
 		++argi;
 	}
-	if(argi+2 > argc)
+	if((argi+2 > argc && !showLst) || argi+1 > argc )
 	{
 		std::cerr <<
-			"Syntax: afedit [options] <input filename> <output filename>\n"
+			"Syntax: afedit [options] <input filename> [<output filename>]\n"
 			"options:\n"
 			"  -trim-start <start index>\n"
 			"  -trim-end <end index>\n"
@@ -63,9 +63,12 @@ int main(int argc, char* argv[])
 			"  -lst-end <end lst>\n"
 			"  -show-list <lst>\n";
 	}
-	const char
-		*inputFilename(argv[argi]),
-		*outputFilename(argv[argi+1]);
+	const char *inputFilename(argv[argi]);
+	const char *outputFilename;
+	if(showLst)
+		outputFilename = nullptr;
+	else
+		outputFilename = argv[argi+1];
 		
 	if(lstStart.HasValue() || lstEnd.HasValue() || showLst)
 	{
