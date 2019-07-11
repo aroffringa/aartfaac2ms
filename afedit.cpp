@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
 			"  -trim-end <end index>\n"
 			"  -lst-start <start lst>\n"
 			"  -lst-end <end lst>\n"
-			"  -show-list <lst>\n";
+			"  -show-lst <lst>\n";
 	}
 	const char *inputFilename(argv[argi]);
 	const char *outputFilename;
