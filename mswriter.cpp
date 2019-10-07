@@ -8,6 +8,8 @@
 #include <casacore/tables/Tables/ArrColDesc.h>
 #include <casacore/tables/Tables/ScalarColumn.h>
 #include <casacore/tables/Tables/SetupNewTab.h>
+#include <casacore/tables/Tables/TableRecord.h>
+
 #include <casacore/casa/Containers/Record.h>
 
 #include <casacore/casa/Arrays/Cube.h>
@@ -482,9 +484,7 @@ void MSWriter::writeFeedEntries()
 		numReceptorsCol.put(rowIndex, 2);
 		beamIdCol.put(rowIndex, -1);
 		
-		casacore::Array<double> beamOffset(IPosition(2, 2, 2));
-		casacore::Array<double>::iterator i = beamOffset.begin();
-		*i = 0.0; ++i; *i = 0.0; ++i; *i = 0.0; ++i; *i = 0.0;
+		casacore::Array<double> beamOffset(IPosition(2, 2, 2), 0.0);
 		beamOffsetCol.put(rowIndex, beamOffset);
 		
 		casacore::Vector<casacore::String> polType(2);
