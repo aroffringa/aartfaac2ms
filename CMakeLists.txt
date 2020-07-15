@@ -14,7 +14,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake)
 
-find_package(AOFlagger 2 REQUIRED)
+include_directories(${CMAKE_SOURCE_DIR}/aocommon/include)
+
+find_package(AOFlagger 3 REQUIRED)
 include_directories(${AOFLAGGER_INCLUDE_DIR})
 
 find_package(PythonLibs 3 REQUIRED)
