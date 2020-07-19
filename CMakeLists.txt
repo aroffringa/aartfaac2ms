@@ -17,9 +17,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake)
 find_package(AOFlagger 2 REQUIRED)
 include_directories(${AOFLAGGER_INCLUDE_DIR})
 
+find_package(Threads REQUIRED)
+
 find_package(PythonLibs 3 REQUIRED)
 find_package(PythonInterp 3 REQUIRED)
 message(STATUS "Using python version ${PYTHON_VERSION_STRING}")
+
 set(BOOSTPY ${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
 find_package(Boost 1.55.0 REQUIRED COMPONENTS date_time filesystem python${BOOSTPY})
 set(BOOST_PART_LIBRARIES ${Boost_LIBRARIES})
@@ -27,7 +30,7 @@ set(BOOST_PART_LIBRARIES ${Boost_LIBRARIES})
 find_package(Boost 1.55.0 COMPONENTS numpy${BOOSTPY})
 set(Boost_LIBRARIES ${BOOST_PART_LIBRARIES} ${Boost_LIBRARIES})
 
-SET(CASACORE_MAKE_REQUIRED_EXTERNALS_OPTIONAL TRUE)
+set(CASACORE_MAKE_REQUIRED_EXTERNALS_OPTIONAL TRUE)
 find_package(Casacore REQUIRED COMPONENTS casa ms tables measures fits scimath scimath_f)
 
 include_directories(${CASACORE_INCLUDE_DIRS})
@@ -36,19 +39,19 @@ include_directories(${CASACORE_INCLUDE_DIRS})
 # LD_LIBRARY_PATH doesn't have to be set.
 
 # use, i.e. don't skip the full RPATH for the build tree
-SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+set(CMAKE_SKIP_BUILD_RPATH  FALSE)
 # when building, don't use the install RPATH already
 # (but later on when installing)
-SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE) 
-SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE) 
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 # add the automatically determined parts of the RPATH
 # which point to directories outside the build tree to the install RPATH
-SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 # the RPATH to be used when installing, but only if it's not a system directory
-LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
-IF("${isSystemDir}" STREQUAL "-1")
-  SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-ENDIF("${isSystemDir}" STREQUAL "-1")
+list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+if("${isSystemDir}" STREQUAL "-1")
+  set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+endif("${isSystemDir}" STREQUAL "-1")
 
 configure_file(version.h.in version.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -57,10 +60,11 @@ add_executable(aartfaac2ms main.cpp aartfaac2ms.cpp aartfaacms.cpp averagingwrit
 target_link_libraries(aartfaac2ms
 	${AOFLAGGER_LIB} ${CASACORE_LIBRARIES}
 	${Boost_SYSTEM_LIBRARY} ${Boost_DATE_TIME_LIBRARY} ${Boost_PYTHON_LIBRARIES}
-	${PYTHON_LIBRARIES})
+	${PYTHON_LIBRARIES}
+	Threads::Threads)
 
 add_executable(afedit afedit.cpp)
-target_link_libraries(afedit ${CASACORE_LIBRARIES})
+target_link_libraries(afedit ${CASACORE_LIBRARIES} Threads::Threads)
 
 install(TARGETS aartfaac2ms afedit DESTINATION bin)
 
