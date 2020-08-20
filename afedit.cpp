@@ -11,7 +11,17 @@
 #include <casacore/measures/Measures/MCEpoch.h>
 #include <casacore/measures/Measures/MeasConvert.h>
 #include <casacore/measures/Measures/MEpoch.h>
+#include <casacore/casa/Quanta/MVTime.h>
 #include <casacore/measures/Measures/MPosition.h>
+
+
+// Convert casacore time to ISO 8601 format
+std::string TimeToString(const casacore::MVTime& time)
+{
+	std::string out = time.string((casacore::MVTime::formatTypes)(casacore::MVTime::YMD), 8);
+	out[4] = '-'; out[7] = '-'; out[10] = 'T';
+	return out;
+}
 
 int main(int argc, char* argv[])
 {
@@ -78,7 +88,8 @@ int main(int argc, char* argv[])
 		TimeRange range(lstStart.ValueOr(0.0), lstEnd.ValueOr(24.0));
 		size_t lstStartIndex = file.NTimesteps(), lstEndIndex = 0;
 		double firstLst = 0.0, lastLst = 0.0;
-		
+		casacore::MVTime firstUtc, lastUtc;
+
 		size_t
 			tStart = intervalStart.ValueOr(0),
 			tEnd = intervalEnd.ValueOr(file.NTimesteps());
@@ -99,10 +110,16 @@ int main(int argc, char* argv[])
 				lstEndIndex = timestep;
 			}
 			if(timestep == tStart)
+			{
 				firstLst = hour;
-			if(timestep+1 == tEnd)
+				firstUtc = timeEpoch.getValue();
+			}
+			if(timestep+1 == tEnd) {
 				lastLst = hour;
+				lastUtc = timeEpoch.getValue();
+			}
 		}
+		std::cout << "UTC range of observation: " << TimeToString(firstUtc) << " - " << TimeToString(lastUtc) << ".\n";
 		std::cout << "LST range of observation: " << RaDecCoord::RAToString(firstLst*(M_PI/12.0)) << " - " << RaDecCoord::RAToString(lastLst*(M_PI/12.0)) << " (in hours: " << firstLst << " - " << lastLst << ").\n";
 		if(showLst)
 			return 0;
