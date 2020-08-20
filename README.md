@@ -18,8 +18,8 @@ Run `afedit` without parameters to get the list of parameters. This is an exampl
     Selected timesteps from LST interval: 225 - 582
 
 This writes a new file 'lst-selected.raw.vis'. The lst start and end parameters are local apparent
-sidereal times in hours. So 7.5 is 7:30 LST. One can also give only a start or end or end time, and then the other
-end of the interval is left open (so -lst-start 7 means all timesteps after lst 7). '24h wrapping' is
+sidereal times in hours. So 7.5 is 7:30 LST. One can also give only a start or end time, and then the other
+side of the interval is left open (so -lst-start 7 means all timesteps after lst 7). '24h wrapping' is
 supported, so doing this:
 
     $ afedit -lst-start 10 -lst-end 9 A12_SB072_1ch1s_10min.raw.vis test.raw.vis
