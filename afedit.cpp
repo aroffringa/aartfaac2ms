@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
 	Optional<size_t> intervalStart, intervalEnd;
 	Optional<double> lstStart, lstEnd;
 	bool showLst = false;
+
 	while(argi < argc && argv[argi][0] == '-')
 	{
 		std::string p(&argv[argi][1]);
@@ -79,7 +80,7 @@ int main(int argc, char* argv[])
 		outputFilename = nullptr;
 	else
 		outputFilename = argv[argi+1];
-		
+
 	if(lstStart.HasValue() || lstEnd.HasValue() || showLst)
 	{
 		AartfaacFile file(inputFilename);
@@ -93,7 +94,7 @@ int main(int argc, char* argv[])
 		size_t
 			tStart = intervalStart.ValueOr(0),
 			tEnd = intervalEnd.ValueOr(file.NTimesteps());
-		
+
 		// TODO this could be done with binary search to make it faster
 		for(size_t timestep=tStart; timestep!=tEnd; ++timestep)
 		{
@@ -133,7 +134,7 @@ int main(int argc, char* argv[])
 		intervalStart = lstStartIndex;
 		intervalEnd = lstEndIndex;
 	}
-	
+
 	std::ifstream inFile(inputFilename);
 	inFile.seekg(0, std::ios::end);
 	size_t filesize = inFile.tellg();
@@ -142,7 +143,7 @@ int main(int argc, char* argv[])
 		std::cerr << "Error reading file " << inputFilename << ".\n";
 		return 1;
 	}
-	
+
 	// Read first header
 	AartfaacHeader header;
 	inFile.seekg(0, std::ios::beg);
@@ -150,7 +151,7 @@ int main(int argc, char* argv[])
 	header.Check();
 	size_t blockSize = sizeof(std::complex<float>) * header.VisPerTimestep();
 	size_t timesteps = filesize / blockSize;
-	
+
 	if(!intervalStart.HasValue())
 		intervalStart = 0;
 	if(!intervalEnd.HasValue())
@@ -160,7 +161,7 @@ int main(int argc, char* argv[])
 		std::cerr << "Invalid trimming interval.\n";
 		return 1;
 	}
-	
+
 	// Copy the interval
 	std::ofstream outFile(outputFilename);
 	std::vector<char> block(sizeof(AartfaacHeader) + blockSize);
