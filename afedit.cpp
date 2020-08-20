@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
 		{
 			file.SeekToTimestep(timestep);
 			Timestep t = file.ReadMetadata();
-			double obsTime = AartfaacFile::TimeToCasa((t.startTime + t.endTime) * 0.5);
+			double obsTime = (t.startTime + t.endTime) * 0.5;
 			casacore::MEpoch timeEpoch = casacore::MEpoch(casacore::MVEpoch(obsTime/86400.0), casacore::MEpoch::UTC);
 			casacore::MEpoch lst = casacore::MEpoch::Convert(timeEpoch, casacore::MEpoch::Ref(casacore::MEpoch::LAST, frame))();
 			double hour = lst.getValue().getDayFraction() * 24.0;
