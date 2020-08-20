@@ -230,6 +230,12 @@ void Aartfaac2ms::setObservation()
 
 void Aartfaac2ms::baselineProcessThreadFunc(ProgressBar* progressBar)
 {
+	aoflagger::Strategy strategy;
+	if(_rfiDetection)
+	{
+		strategy = _flagger.LoadStrategyFile(_strategyFile);
+	}
+	
 	QualityStatistics threadStatistics =
 		_flagger.MakeQualityStatistics(_timestepsStart.data(), _timestepsStart.size(), &_channelFrequenciesHz[0], _channelFrequenciesHz.size(), 4, _collectHistograms);
 	
@@ -241,7 +247,7 @@ void Aartfaac2ms::baselineProcessThreadFunc(ProgressBar* progressBar)
 		progressBar->SetProgress(currentTaskCount, _imageSetBuffers.size());
 		lock.unlock();
 		
-		processBaseline(baseline, threadStatistics);
+		processBaseline(baseline, strategy, threadStatistics);
 	}
 	
 	// Mutex needs to be locked
@@ -252,18 +258,18 @@ void Aartfaac2ms::baselineProcessThreadFunc(ProgressBar* progressBar)
 		(*_statistics) += threadStatistics;
 }
 
-void Aartfaac2ms::processBaseline(size_t baselineIndex, QualityStatistics& threadStatistics)
+void Aartfaac2ms::processBaseline(size_t baselineIndex, Strategy& threadStrategy, QualityStatistics& threadStatistics)
 {
 	ImageSet& imageSet = _imageSetBuffers[baselineIndex];
 	FlagMask& flagMask = _flagBuffers[baselineIndex];
 	const std::pair<size_t, size_t>& baseline = _baselines[baselineIndex];
 	
 	if(_rfiDetection && (baseline.first != baseline.second))
-		flagMask = _flagger.Run(*_strategy, imageSet);
+		flagMask = threadStrategy.Run(imageSet);
 	else
 		flagMask = _flagger.MakeFlagMask(_timestepsStart.size(), _channelFrequenciesHz.size(), false);
 
-	_flagger.CollectStatistics(threadStatistics, imageSet, flagMask, _correlatorMask, baseline.first, baseline.second);
+	threadStatistics.CollectStatistics(imageSet, flagMask, _correlatorMask, baseline.first, baseline.second);
 }
 
 void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, const char* antennaConfFilename, AartfaacMode mode)
@@ -273,26 +279,19 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 	
 	readAntennaPositions(antennaConfFilename);
 	
-	ao::uvector<std::complex<float>> vis(_reader->VisPerTimestep());
+	if(_rfiDetection)
+		_strategyFile = _flagger.FindStrategyFile(aoflagger::TelescopeId::AARTFAAC_TELESCOPE);
+	
+	aocommon::UVector<std::complex<float>> vis(_reader->VisPerTimestep());
 	size_t index = 0;
 	
 	allocateBuffers();
 	
 	initializeWriter(outputFilename);
 	
-	if(_rfiDetection)
-	{
-		_strategy.reset(new Strategy(_flagger.MakeStrategy(
-			aoflagger::TelescopeId::AARTFAAC_TELESCOPE,
-			aoflagger::StrategyFlags::NONE,
-			_reader->Frequency(),
-			_reader->IntegrationTime(),
-			_reader->Bandwidth() )));
-	}
-	
 	_reader->SeekToTimestep(_intervalStart);
 	
-	ao::uvector<size_t> baselineMap(_reader->NAntennas()*_reader->NAntennas());
+	aocommon::UVector<size_t> baselineMap(_reader->NAntennas()*_reader->NAntennas());
 	size_t bIndex = 0;
 	for(size_t antenna1=0; antenna1!=_reader->NAntennas(); ++antenna1)
 	{
@@ -399,7 +398,7 @@ void Aartfaac2ms::Run(const char* inputFilename, const char* outputFilename, con
 	
 	if(_collectStatistics) {
 		std::cout << "Writing statistics to measurement set...\n";
-		_flagger.WriteStatistics(*_statistics, outputFilename);
+		_statistics->WriteStatistics(outputFilename);
 	}
 	
 	if(_outputFormat == MSOutputFormat)
@@ -440,7 +439,7 @@ void Aartfaac2ms::processAndWriteTimestep(size_t timeIndex, size_t chunkStart)
 	
 	_writer->AddRows(nBaselines);
 	
-	ao::uvector<double>
+	aocommon::UVector<double>
 		cosAngles(nChannels),
 		sinAngles(nChannels);
 	

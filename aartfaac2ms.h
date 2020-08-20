@@ -11,8 +11,8 @@
 #include "progressbar.h"
 #include "writer.h"
 
-#include "aocommon/lane.h"
-#include "aocommon/uvector.h"
+#include <aocommon/lane.h>
+#include <aocommon/uvector.h>
 
 #include <casacore/measures/Measures/MDirection.h>
 #include <casacore/measures/Measures/MPosition.h>
@@ -62,7 +62,7 @@ private:
 	void initializeWeights(float* outputWeights, double integrationTime);
 	void readAntennaPositions(const char* antennaConfFilename);
 	void baselineProcessThreadFunc(ProgressBar* progressBar);
-	void processBaseline(size_t baseline, aoflagger::QualityStatistics& threadStatistics);
+	void processBaseline(size_t baseline, aoflagger::Strategy& threadStrategy, aoflagger::QualityStatistics& threadStatistics);
 	void writeAartfaacFieldsToMS(const std::string& outputFilename, size_t flagWindowSize);
 	
 	void setAntennas();
@@ -83,9 +83,9 @@ private:
 	aoflagger::AOFlagger _flagger;
 	std::unique_ptr<aoflagger::QualityStatistics> _statistics;
 	std::unique_ptr<Writer> _writer;
-	std::unique_ptr<aoflagger::Strategy> _strategy;
+	std::string _strategyFile;
 	std::mutex _mutex;
-	ao::lane<size_t> _baselinesToProcess;
+	aocommon::Lane<size_t> _baselinesToProcess;
 	
 	// settings
 	AartfaacMode _mode;
@@ -115,10 +115,10 @@ private:
 	std::vector<casacore::MPosition> _antennaPositions;
 	std::array<double, 9> _antennaAxes;
 	casacore::MDirection _phaseDirection;
-	ao::uvector<double> _channelFrequenciesHz;
+	aocommon::UVector<double> _channelFrequenciesHz;
 	
 	// write buffers
-	ao::uvector<bool> _outputFlags;
+	aocommon::UVector<bool> _outputFlags;
 	aligned_ptr<std::complex<float>> _outputData;
 	aligned_ptr<float> _outputWeights;
 	
