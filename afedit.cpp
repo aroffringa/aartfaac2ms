@@ -23,11 +23,23 @@ std::string TimeToString(const casacore::MVTime& time)
 	return out;
 }
 
+// Convert ISO 8601 time format to casacore time value (in seconds). Example format: "2020-08-13T16:01.001"
+double StringToEpoch(const std::string& datestring)
+{
+	casacore::Quantity mytime_q;
+	bool succes = casacore::MVTime::read(mytime_q, datestring);
+	if (!succes) {
+		throw std::runtime_error("Could not interpret as datestring: "  + datestring);
+	}
+	return casacore::MEpoch(mytime_q, casacore::MEpoch::UTC).getValue().getTime("s").getValue();
+}
+
 int main(int argc, char* argv[])
 {
 	int argi = 1;
 	Optional<size_t> intervalStart, intervalEnd;
 	Optional<double> lstStart, lstEnd;
+	Optional<double> utcStart, utcEnd;
 	bool showLst = false;
 
 	while(argi < argc && argv[argi][0] == '-')
@@ -53,6 +65,16 @@ int main(int argc, char* argv[])
 			++argi;
 			lstEnd = atof(argv[argi]);
 		}
+		else if(p == "utc-start")
+		{
+			++argi;
+			utcStart = StringToEpoch(argv[argi]);
+		}
+		else if(p == "utc-end")
+		{
+			++argi;
+			utcEnd = StringToEpoch(argv[argi]);
+		}
 		else if(p == "show-lst")
 		{
 			showLst = true;
@@ -72,6 +94,8 @@ int main(int argc, char* argv[])
 			"  -trim-end <end index>\n"
 			"  -lst-start <start lst>\n"
 			"  -lst-end <end lst>\n"
+			"  -utc-start <start utc>\n"
+			"  -utc-end <end utc>\n"
 			"  -show-lst <lst>\n";
 	}
 	const char *inputFilename(argv[argi]);
@@ -81,13 +105,14 @@ int main(int argc, char* argv[])
 	else
 		outputFilename = argv[argi+1];
 
-	if(lstStart.HasValue() || lstEnd.HasValue() || showLst)
+	if(lstStart.HasValue() || lstEnd.HasValue() || utcStart.HasValue() || utcEnd.HasValue() || showLst)
 	{
 		AartfaacFile file(inputFilename);
 		casacore::MPosition aartfaacPos(casacore::MVPosition(3826577.022720000, 461022.995082000, 5064892.814), casacore::MPosition::ITRF);
 		casacore::MeasFrame frame(aartfaacPos);
-		TimeRange range(lstStart.ValueOr(0.0), lstEnd.ValueOr(24.0));
-		size_t lstStartIndex = file.NTimesteps(), lstEndIndex = 0;
+		TimeRange lstRange(lstStart.ValueOr(0.0), lstEnd.ValueOr(24.0));
+		TimeRange utcRange(utcStart.ValueOr(0.0), utcEnd.ValueOr(1e12));
+		size_t selectionStartIndex = file.NTimesteps(), selectionEndIndex = 0;
 		double firstLst = 0.0, lastLst = 0.0;
 		casacore::MVTime firstUtc, lastUtc;
 
@@ -102,13 +127,14 @@ int main(int argc, char* argv[])
 			Timestep t = file.ReadMetadata();
 			double obsTime = (t.startTime + t.endTime) * 0.5;
 			casacore::MEpoch timeEpoch = casacore::MEpoch(casacore::MVEpoch(obsTime/86400.0), casacore::MEpoch::UTC);
+			double timeEpochValue = timeEpoch.getValue().getTime("s").getValue();
 			casacore::MEpoch lst = casacore::MEpoch::Convert(timeEpoch, casacore::MEpoch::Ref(casacore::MEpoch::LAST, frame))();
 			double hour = lst.getValue().getDayFraction() * 24.0;
-			if(range.Contains(hour))
+			if(lstRange.Contains(hour) && utcRange.Contains(timeEpochValue))
 			{
-				if(lstStartIndex == file.NTimesteps())
-					lstStartIndex = timestep;
-				lstEndIndex = timestep;
+				if(selectionStartIndex == file.NTimesteps())
+					selectionStartIndex = timestep;
+				selectionEndIndex = timestep;
 			}
 			if(timestep == tStart)
 			{
@@ -124,15 +150,15 @@ int main(int argc, char* argv[])
 		std::cout << "LST range of observation: " << RaDecCoord::RAToString(firstLst*(M_PI/12.0)) << " - " << RaDecCoord::RAToString(lastLst*(M_PI/12.0)) << " (in hours: " << firstLst << " - " << lastLst << ").\n";
 		if(showLst)
 			return 0;
-		if(lstStartIndex == file.NTimesteps())
+		if(selectionStartIndex == file.NTimesteps())
 		{
-			std::cerr << "File has no timesteps in given LST interval.\n";
+			std::cerr << "File has no timesteps in given interval.\n";
 			return 1;
 		}
-		++lstEndIndex;
-		std::cout << "Selected timesteps from LST interval: " << lstStartIndex << " - " << lstEndIndex << '\n';
-		intervalStart = lstStartIndex;
-		intervalEnd = lstEndIndex;
+		++selectionEndIndex;
+		std::cout << "Selected timesteps from interval: " << selectionStartIndex << " - " << selectionEndIndex << '\n';
+		intervalStart = selectionStartIndex;
+		intervalEnd = selectionEndIndex;
 	}
 
 	std::ifstream inFile(inputFilename);
