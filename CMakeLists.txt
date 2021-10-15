@@ -20,7 +20,7 @@ find_package(AOFlagger 3 REQUIRED)
 include_directories(${AOFLAGGER_INCLUDE_DIR})
 
 find_package(CFITSIO REQUIRED)
-include_directories(${CFITSIO_INCLUDE_DIR})
+include_directories(${CFITSIO_INCLUDE_DIRS})
 
 find_package(Threads REQUIRED)
 
