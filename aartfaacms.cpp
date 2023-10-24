@@ -12,6 +12,7 @@
 
 #include <casacore/measures/Measures/MEpoch.h>
 
+#include <array>
 #include <stdexcept>
 #include <sstream>
 

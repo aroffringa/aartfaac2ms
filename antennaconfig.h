@@ -1,7 +1,8 @@
 #ifndef ANTENNA_CONFIG_H
 #define ANTENNA_CONFIG_H
 
-#include <algorithm> 
+#include <algorithm>
+#include <array>
 #include <cctype>
 #include <fstream>
 #include <locale>
